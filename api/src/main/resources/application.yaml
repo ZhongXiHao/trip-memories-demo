@@ -1,3 +1,12 @@
 spring:
   application:
     name: api
+  datasource:
+    # connectionTimeZone=UTC：库里所有 DATETIME 都存 UTC，见 db/init/schema.sql 头部约定
+    url: ${DB_URL:jdbc:mysql://localhost:3306/trip_memories?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true}
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:}
+
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
