@@ -1,3 +1,8 @@
+server:
+  servlet:
+    # 契约的 base path。拦截器、Controller 里的路径都不再写 /api
+    context-path: /api
+
 spring:
   application:
     name: api
