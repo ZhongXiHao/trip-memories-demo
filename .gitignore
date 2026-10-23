@@ -1,3 +1,4 @@
 .idea
 **/.env
 /docs/overview
+/docs/tmp
