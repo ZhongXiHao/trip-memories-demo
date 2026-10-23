@@ -1,0 +1,23 @@
+# 本地开发用 MySQL。启动：docker compose up -d；schema.sql 改了就 docker compose down 后再 up。
+# 测试不依赖它：api 的测试用 Testcontainers 自己起临时库，执行的是同一份 db/init。
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: trip-mysql
+    # 时区设成 UTC，见 db/init/schema.sql 头部约定
+    command: --default-time-zone=+00:00
+    environment:
+      MYSQL_DATABASE: trip_memories
+      # 仅限本机开发：root 空密码，所以端口只绑本机回环地址
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      # 只在数据目录为空（容器第一次创建）时执行
+      - ./db/init/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./db/init/data.sql:/docker-entrypoint-initdb.d/02-data.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
