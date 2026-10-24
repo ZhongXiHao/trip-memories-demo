@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/auth")
 @Profile("dev")
-public class DevAuthController {
+class DevAuthController {
     private final UserMapper userMapper;
 
     DevAuthController(UserMapper userMapper) {
