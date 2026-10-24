@@ -2,7 +2,6 @@ package com.cshlands.api.trip;
 
 import com.cshlands.api.common.ApiException;
 import com.cshlands.api.currency.CurrencyMapper;
-import com.cshlands.api.member.MemberRole;
 import com.cshlands.api.member.MemberService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,7 +34,8 @@ class TripService {
     }
 
     public TripView get(long userId, long tripId) {
-        return requireMember(userId, tripId);
+        memberService.requireActiveMember(userId, tripId);
+        return tripMapper.findView(tripId, userId);
     }
 
     public List<TripView> list(long userId) {
@@ -43,7 +43,7 @@ class TripService {
     }
 
     public TripView update(long userId, long tripId, TripRequest request) {
-        requireOwner(userId, tripId);
+        memberService.requireOwner(userId, tripId);
         validate(request);
 
         tripMapper.update(tripId, request);
@@ -51,23 +51,8 @@ class TripService {
     }
 
     public void delete(long userId, long tripId) {
-        requireOwner(userId, tripId);
+        memberService.requireOwner(userId, tripId);
         tripMapper.softDelete(tripId);
-    }
-
-    /** 不是在籍成员（含已退出、Trip 不存在或已删除）一律 404 */
-    private TripView requireMember(long userId, long tripId) {
-        TripView view = tripMapper.findView(tripId, userId);
-        if (view == null) {
-            throw ApiException.notFound();
-        }
-        return view;
-    }
-
-    private void requireOwner(long userId, long tripId) {
-        if (requireMember(userId, tripId).myRole() != MemberRole.OWNER) {
-            throw ApiException.forbidden("Only the owner can do this");
-        }
     }
 
     private void validate(TripRequest request) {
