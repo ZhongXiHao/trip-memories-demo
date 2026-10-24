@@ -5,7 +5,7 @@ import lombok.Setter;
 
 import java.time.LocalDate;
 
-/** 插入 trip 表用；id 由 useGeneratedKeys 写回。请求体用 {@link CreateTripRequest}，不要混用。 */
+/** 插入 trip 表用；id 由 useGeneratedKeys 写回。请求体用 {@link TripRequest}，不要混用。 */
 @Getter
 class NewTrip {
 
@@ -19,7 +19,7 @@ class NewTrip {
     private final LocalDate endDate;
     private final long createdBy;
 
-    NewTrip(CreateTripRequest request, long createdBy) {
+    NewTrip(TripRequest request, long createdBy) {
         this.name = request.name();
         this.description = request.description();
         this.displayCurrency = request.displayCurrency();

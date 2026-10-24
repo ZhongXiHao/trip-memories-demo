@@ -78,7 +78,7 @@ Trip 对象：
    - 仅 Owner。整体替换，字段同创建。Trip 没有 `version`，同时修改时后写覆盖。
    - 改 `timezone` 只影响之后新建支出的默认时区；已有支出按各自的 `occurredTz` 算天，不受影响。改 `startDate` 会让各笔的 `dayIndex` 跟着变（算出来的，不存）。
 4. trip 删除：POST /trips/{tripId}/delete（用 POST 符合软删除修改逻辑）
-   - 仅 Owner。软删除，之后这个 Trip 下的所有接口都返回 404。
+   - 仅 Owner。软删除，响应 204 无内容；之后这个 Trip 下的所有接口（包括再删一次）都返回 404，也不再出现在「我的行程」里。成员和账目的行都保留，只是 Trip 打了删除时间。
 5. trip 列表：GET /trips
    - 「我的行程」：当前用户是在籍成员的 Trip，按创建时间倒序。没有 `userId` 参数，永远是当前登录的人。响应 `{"items": [Trip 对象]}`。
 

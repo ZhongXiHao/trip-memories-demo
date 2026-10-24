@@ -34,6 +34,16 @@ public class ApiException extends RuntimeException {
         return new ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "Authentication required");
     }
 
+    /** 资源不存在、已删除，或调用者不是该 Trip 的在籍成员（不泄露 Trip 是否存在） */
+    public static ApiException notFound() {
+        return new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Resource not found");
+    }
+
+    /** 是成员但没有权限 */
+    public static ApiException forbidden(String message) {
+        return new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", message);
+    }
+
     public HttpStatus status() {
         return status;
     }

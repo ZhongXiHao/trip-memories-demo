@@ -2,11 +2,13 @@ package com.cshlands.api.trip;
 
 import com.cshlands.api.common.ApiException;
 import com.cshlands.api.currency.CurrencyMapper;
+import com.cshlands.api.member.MemberRole;
 import com.cshlands.api.member.MemberService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.ZoneId;
+import java.util.List;
 
 @Service
 class TripService {
@@ -22,7 +24,53 @@ class TripService {
     }
 
     @Transactional
-    public TripView create(long userId, CreateTripRequest request) {
+    public TripView create(long userId, TripRequest request) {
+        validate(request);
+
+        NewTrip trip = new NewTrip(request, userId);
+        tripMapper.insert(trip);
+        memberService.createOwner(trip.getId(), userId);
+
+        return tripMapper.findView(trip.getId(), userId);
+    }
+
+    public TripView get(long userId, long tripId) {
+        return requireMember(userId, tripId);
+    }
+
+    public List<TripView> list(long userId) {
+        return tripMapper.listViews(userId);
+    }
+
+    public TripView update(long userId, long tripId, TripRequest request) {
+        requireOwner(userId, tripId);
+        validate(request);
+
+        tripMapper.update(tripId, request);
+        return tripMapper.findView(tripId, userId);
+    }
+
+    public void delete(long userId, long tripId) {
+        requireOwner(userId, tripId);
+        tripMapper.softDelete(tripId);
+    }
+
+    /** 不是在籍成员（含已退出、Trip 不存在或已删除）一律 404 */
+    private TripView requireMember(long userId, long tripId) {
+        TripView view = tripMapper.findView(tripId, userId);
+        if (view == null) {
+            throw ApiException.notFound();
+        }
+        return view;
+    }
+
+    private void requireOwner(long userId, long tripId) {
+        if (requireMember(userId, tripId).myRole() != MemberRole.OWNER) {
+            throw ApiException.forbidden("Only the owner can do this");
+        }
+    }
+
+    private void validate(TripRequest request) {
         if (request.startDate() != null && request.endDate() != null
                 && request.endDate().isBefore(request.startDate())) {
             throw ApiException.validationFailed("endDate", "must not be before startDate");
@@ -33,12 +81,6 @@ class TripService {
         if (!ZoneId.getAvailableZoneIds().contains(request.timezone())) {
             throw ApiException.validationFailed("timezone", "must be an IANA time zone, e.g. Asia/Tokyo");
         }
-
-        NewTrip trip = new NewTrip(request, userId);
-        tripMapper.insert(trip);
-        memberService.createOwner(trip.getId(), userId);
-
-        return tripMapper.findView(trip.getId(), userId);
     }
 
 }
