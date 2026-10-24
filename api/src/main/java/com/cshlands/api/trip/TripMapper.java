@@ -14,7 +14,9 @@ interface TripMapper {
 
     /** 当前用户（#{userId}）视角的 Trip：只包含他在籍的、未删除的。created_at 由库的默认值生成，所以插入后要查回来。 */
     String VIEW_SELECT = "SELECT t.id, t.name, t.description, t.start_date, t.end_date, t.timezone, " +
-            "       t.display_currency, m.id AS my_member_id, m.role AS my_role, t.created_at " +
+            "       t.display_currency, m.id AS my_member_id, m.role AS my_role, " +
+            "       (SELECT COUNT(*) FROM trip_member c WHERE c.trip_id = t.id AND c.status = 'active') AS member_count, " +
+            "       t.created_at " +
             "FROM trip t " +
             "JOIN trip_member m ON m.trip_id = t.id AND m.user_id = #{userId} AND m.status = 'active' " +
             "WHERE t.deleted_at IS NULL";

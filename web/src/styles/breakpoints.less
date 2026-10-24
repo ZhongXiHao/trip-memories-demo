@@ -1,0 +1,5 @@
+// 断点。只有一个：
+//   < 960px  手机 / 平板竖屏：单栏，最宽 480px 居中，每页顶部是深色 BoardHeader
+//   ≥ 960px  PC：顶部通栏导航条（AppTopBar）+ 最宽 1120px 的内容区，BoardHeader 变成内容区里的页面标题
+// 在组件里这样用：  @import (reference) '../styles/breakpoints.less';  @media (min-width: @bp-desktop) { … }
+@bp-desktop: 960px;

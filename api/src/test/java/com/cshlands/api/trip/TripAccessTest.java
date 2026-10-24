@@ -105,10 +105,25 @@ class TripAccessTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(tripId))
                 .andExpect(jsonPath("$.name").value("東京"))
-                .andExpect(jsonPath("$.myRole").value("owner"));
+                .andExpect(jsonPath("$.myRole").value("owner"))
+                .andExpect(jsonPath("$.memberCount").value(2));
         getTrip(member, tripId)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.myRole").value("member"));
+                .andExpect(jsonPath("$.myRole").value("member"))
+                .andExpect(jsonPath("$.memberCount").value(2));
+    }
+
+    @Test
+    void memberCountOnlyCountsActiveMembers() throws Exception {
+        long owner = user("t-owner");
+        long active = user("t-active");
+        long leaver = user("t-leaver");
+        long tripId = trip(owner, "東京", "2026-01-01 00:00:00");
+        member(tripId, active, "member", "active");
+        member(tripId, leaver, "member", "left");
+
+        // 负责人 + 一个在籍成员 = 2；已退出的不算
+        getTrip(owner, tripId).andExpect(jsonPath("$.memberCount").value(2));
     }
 
     @Test
@@ -262,9 +277,12 @@ class TripAccessTest {
                 .andExpect(jsonPath("$.items", hasSize(3)))
                 .andExpect(jsonPath("$.items[0].id").value(newest))
                 .andExpect(jsonPath("$.items[0].myRole").value("owner"))
+                .andExpect(jsonPath("$.items[0].memberCount").value(1))
                 .andExpect(jsonPath("$.items[1].id").value(joined))
                 .andExpect(jsonPath("$.items[1].myRole").value("member"))
-                .andExpect(jsonPath("$.items[2].id").value(oldest));
+                .andExpect(jsonPath("$.items[1].memberCount").value(2))
+                .andExpect(jsonPath("$.items[2].id").value(oldest))
+                .andExpect(jsonPath("$.items[2].memberCount").value(1));
     }
 
     @Test
