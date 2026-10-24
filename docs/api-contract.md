@@ -62,11 +62,11 @@ Trip 对象：
   "id": 1, "name": "東京五日遊", "description": null,
   "startDate": "2026-10-01", "endDate": "2026-10-05",
   "timezone": "Asia/Tokyo", "displayCurrency": "HKD",
-  "myMemberId": 3, "myRole": "owner", "createdAt": "2026-09-01T08:00:00Z"
+  "myMemberId": 3, "myRole": "owner", "memberCount": 3, "createdAt": "2026-09-01T08:00:00Z"
 }
 ```
 
-`myMemberId`、`myRole` 是当前用户在这个 Trip 里的成员 id 和角色，省得客户端再去查成员列表。
+`myMemberId`、`myRole` 是当前用户在这个 Trip 里的成员 id 和角色，省得客户端再去查成员列表。`memberCount` 是在籍成员数（不含已退出的），列表页直接显示，不用为每个行程再查一次成员列表。
 
 ### Trip 本身操作
 

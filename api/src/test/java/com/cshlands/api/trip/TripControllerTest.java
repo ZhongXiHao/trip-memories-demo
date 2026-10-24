@@ -79,6 +79,7 @@ class TripControllerTest {
                 .andExpect(jsonPath("$.timezone").value("Asia/Tokyo"))
                 .andExpect(jsonPath("$.displayCurrency").value("HKD"))
                 .andExpect(jsonPath("$.myRole").value("owner"))
+                .andExpect(jsonPath("$.memberCount").value(1))
                 .andReturn().getResponse().getContentAsString();
 
         // createdAt 是库里生成的 UTC 时间，带 Z，并且就是"现在"（时区读错会差几个小时）
