@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+
 -- 币别种子数据。rounding_unit 为存储单位（已含 ×100）：无小数币别 100，两位小数币别 1。
 INSERT INTO currency (code, name, rounding_unit) VALUES
     ('JPY', '日元', 100),

@@ -11,6 +11,9 @@
 --           防重复提交的唯一索引不含 deleted_at，已删除的单据重放会被拒，不会"复活"。
 --   成员退出用 trip_member.status，不删行，历史账目仍能指向他。
 
+-- 容器初始化时 mysql 客户端默认不是 utf8mb4，不声明的话中文会被二次编码入库
+SET NAMES utf8mb4;
+
 CREATE TABLE currency
 (
     code          CHAR(3)     NOT NULL COMMENT 'ISO 4217',
