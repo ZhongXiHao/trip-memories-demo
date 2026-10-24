@@ -45,6 +45,46 @@ describe('router guard', () => {
   })
 })
 
+describe('bottom tab bar (mobile)', () => {
+  const tabNames = () =>
+    router
+      .getRoutes()
+      .filter((r) => r.meta.tab)
+      .map((r) => r.name)
+      .sort()
+
+  it('only the two top-level pages (trips, me) show it', () => {
+    expect(tabNames()).toEqual(['home', 'me'])
+  })
+
+  it('sub-pages (detail, create, edit) and the identity page do not show it', () => {
+    const showingIt = ['trip', 'trip-new', 'trip-edit', 'select-user'].filter(
+      (name) => router.getRoutes().find((r) => r.name === name)?.meta.tab,
+    )
+    expect(showingIt).toEqual([])
+  })
+
+  it('/me needs an identity like every other page except select-user', async () => {
+    localStorage.clear()
+    await router.replace('/select-user')
+
+    await router.push('/me')
+
+    expect(router.currentRoute.value.name).toBe('select-user')
+    expect(router.currentRoute.value.query.redirect).toBe('/me')
+  })
+
+  it('/me opens for a signed-in user', async () => {
+    localStorage.clear()
+    setUserId(1)
+    await router.replace('/')
+
+    await router.push('/me')
+
+    expect(router.currentRoute.value.name).toBe('me')
+  })
+})
+
 describe('trip routes', () => {
   beforeEach(async () => {
     localStorage.clear()

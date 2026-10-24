@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AddMemberPopup: typeof import('./components/AddMemberPopup.vue')['default']
+    AppTabBar: typeof import('./components/AppTabBar.vue')['default']
     AppTopBar: typeof import('./components/AppTopBar.vue')['default']
     BoardHeader: typeof import('./components/BoardHeader.vue')['default']
     CurrencyTag: typeof import('./components/CurrencyTag.vue')['default']
@@ -28,5 +29,7 @@ declare module 'vue' {
     VanPicker: typeof import('vant/es')['Picker']
     VanPopover: typeof import('vant/es')['Popover']
     VanPopup: typeof import('vant/es')['Popup']
+    VanTabbar: typeof import('vant/es')['Tabbar']
+    VanTabbarItem: typeof import('vant/es')['TabbarItem']
   }
 }

@@ -6,6 +6,8 @@ declare module 'vue-router' {
   interface RouteMeta {
     /** 不需要身份就能访问（选择身份页） */
     public?: boolean
+    /** 一级页面：手机上显示底部导航条（行程 / 我的）。详情、新建、编辑这些二级页面不显示。 */
+    tab?: boolean
   }
 }
 
@@ -22,6 +24,13 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: () => import('@/views/HomeView.vue'),
+      meta: { tab: true },
+    },
+    {
+      path: '/me',
+      name: 'me',
+      component: () => import('@/views/MeView.vue'),
+      meta: { tab: true },
     },
     {
       path: '/trips/new',

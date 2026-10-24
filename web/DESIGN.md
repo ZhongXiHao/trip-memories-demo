@@ -46,6 +46,9 @@
 - **图标：** 只用 Vant 自带图标，不再引入第二套。
 - **两套版式，断点 960px**（`styles/breakpoints.less`，组件里 `@import (reference)` 后用 `@bp-desktop`）：
   - **< 960px（手机、平板竖屏）：** 单栏，最宽 480px 居中，两侧是深海军蓝。每页顶部是深色 `BoardHeader`。
+    底部是导航条 `AppTabBar`（左"行程"，右"我的"，"我的"里有当前身份、切换身份、退出登录），
+    **只在一级页面显示**：路由的 `meta.tab: true`（现在是首页和 `/me`）。详情、新建、编辑这些二级页面不显示，
+    用页头里的"返回"；新增一级页面时给路由加 `meta.tab` 并在 `AppTabBar.vue` 里加一项（最多 5 项，图标和文字一起）。
   - **≥ 960px（PC）：** 顶部通栏导航条 `AppTopBar`（左：品牌和导航，右上角：头像 + 昵称，点开是菜单：昵称/ID、切换身份、退出登录；
     头像现在是空白用户图标 `user-o`，以后换真头像只改 `AppTopBar.vue` 里的 `.topbar__avatar`）。
     导航条下面是最宽 1120px 的内容区（`--tm-page-max`）；表单类页面用更窄的 560px（`tm-container--narrow`）。
