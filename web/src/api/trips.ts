@@ -15,6 +15,8 @@ export interface TripView {
   /** 当前用户在这个行程里的成员 id 和角色，省得再去查成员列表 */
   myMemberId: number
   myRole: MemberRole
+  /** 在籍成员数（不含已退出的）。后端旧版本没有这个字段，所以界面要容忍它不存在。 */
+  memberCount: number
   createdAt: string
 }
 

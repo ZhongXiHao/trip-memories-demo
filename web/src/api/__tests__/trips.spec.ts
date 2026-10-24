@@ -14,6 +14,7 @@ const trip: TripView = {
   displayCurrency: 'CNY',
   myMemberId: 3,
   myRole: 'owner',
+  memberCount: 3,
   createdAt: '2026-10-24T08:00:00.000Z',
 }
 

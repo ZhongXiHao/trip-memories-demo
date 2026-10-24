@@ -10,6 +10,7 @@ import { useSessionStore } from '@/stores/session'
 import { formatDateRange } from '@/utils/date'
 import { roleLabel } from '@/utils/members'
 import { timezoneLabel } from '@/utils/timezones'
+import { showError } from '@/utils/toast'
 
 // 我的行程：当前用户在籍的行程，后端已按创建时间倒序。
 const session = useSessionStore()
@@ -19,11 +20,17 @@ type State = 'loading' | 'ready' | 'error'
 const state = ref<State>('loading')
 const trips = ref<TripView[]>([])
 const errorMessage = ref('')
+/** 下拉刷新的状态：true 表示正在刷新，Vant 据此显示"加载中" */
+const refreshing = ref(false)
 
 const isEmpty = computed(() => state.value === 'ready' && trips.value.length === 0)
 
-async function load() {
-  state.value = 'loading'
+/**
+ * silent：下拉刷新时用。不切到"正在加载"，已有的列表保持原样直到新数据到达；
+ * 失败也只弹提示，不把列表换成错误页（刷新失败不应该让已经看到的内容消失）。
+ */
+async function load(silent = false) {
+  if (!silent) state.value = 'loading'
   try {
     trips.value = await listTrips()
     state.value = 'ready'
@@ -31,9 +38,18 @@ async function load() {
     const apiError = toApiError(error)
     // 401 已经由 http.ts 的拦截器处理（清身份并跳去选择页），不用在这里显示
     if (apiError.status === 401) return
+    if (silent) {
+      showError(apiError)
+      return
+    }
     errorMessage.value = describeError(apiError)
     state.value = 'error'
   }
+}
+
+async function onRefresh() {
+  await load(true)
+  refreshing.value = false
 }
 
 onMounted(() => {
@@ -56,32 +72,40 @@ function newTrip() {
     </BoardHeader>
 
     <main class="home tm-container">
-      <div v-if="state === 'loading'" class="status" role="status">
-        <van-loading size="20" />
-        <span>正在加载行程…</span>
-      </div>
+      <!-- 手机上从列表顶部往下拉即可刷新；min-height 让空白处也能拉 -->
+      <van-pull-refresh v-model="refreshing" class="pull" @refresh="onRefresh">
+        <div v-if="state === 'loading'" class="status" role="status">
+          <van-loading size="20" />
+          <span>正在加载行程…</span>
+        </div>
 
-      <div v-else-if="state === 'error'" class="status status--error" role="alert">
-        <p class="status__text">{{ errorMessage }}</p>
-        <van-button size="small" plain type="primary" @click="load">重试</van-button>
-      </div>
+        <div v-else-if="state === 'error'" class="status status--error" role="alert">
+          <p class="status__text">{{ errorMessage }}</p>
+          <van-button size="small" plain type="primary" @click="load()">重试</van-button>
+        </div>
 
-      <p v-else-if="isEmpty" class="empty">还没有行程。点右上角的“新建行程”开始，再邀请朋友一起记账。</p>
+        <p v-else-if="isEmpty" class="empty">还没有行程。点右上角的“新建行程”开始，再邀请朋友一起记账。</p>
 
-      <ul v-else class="trips">
-        <li v-for="trip in trips" :key="trip.id">
-          <RouterLink :to="{ name: 'trip', params: { tripId: trip.id } }" class="trip">
-            <h2 class="trip__name">{{ trip.name }}</h2>
-            <p v-if="trip.description" class="trip__description">{{ trip.description }}</p>
-            <p class="trip__dates tm-num">{{ formatDateRange(trip.startDate, trip.endDate) }}</p>
-            <div class="trip__meta">
-              <CurrencyTag :code="trip.displayCurrency" />
-              <span class="trip__tz">{{ timezoneLabel(trip.timezone) }}</span>
-              <span v-if="trip.myRole === 'owner'" class="trip__role">{{ roleLabel(trip.myRole) }}</span>
-            </div>
-          </RouterLink>
-        </li>
-      </ul>
+        <ul v-else class="trips">
+          <li v-for="trip in trips" :key="trip.id">
+            <RouterLink :to="{ name: 'trip', params: { tripId: trip.id } }" class="trip">
+              <h2 class="trip__name">{{ trip.name }}</h2>
+              <p v-if="trip.description" class="trip__description">{{ trip.description }}</p>
+              <p class="trip__dates tm-num">{{ formatDateRange(trip.startDate, trip.endDate) }}</p>
+              <div class="trip__meta">
+                <CurrencyTag :code="trip.displayCurrency" />
+                <span class="trip__tz">{{ timezoneLabel(trip.timezone) }}</span>
+                <!-- 旧版后端没有 memberCount 字段时不显示，免得出现"undefined 人" -->
+                <span v-if="typeof trip.memberCount === 'number'" class="trip__members">
+                  <van-icon name="friends-o" aria-hidden="true" />
+                  {{ trip.memberCount }} 人
+                </span>
+                <span v-if="trip.myRole === 'owner'" class="trip__role">{{ roleLabel(trip.myRole) }}</span>
+              </div>
+            </RouterLink>
+          </li>
+        </ul>
+      </van-pull-refresh>
     </main>
   </div>
 </template>
@@ -110,6 +134,12 @@ function newTrip() {
 
 .home {
   padding-block: var(--tm-space-4);
+}
+
+// 列表很短（或者是空的）时，空白处也要能往下拉。
+// Vant 只在内部的 track 元素上监听触摸，所以高度要加在 track 上，加在外层没用。
+.pull :deep(.van-pull-refresh__track) {
+  min-height: 60vh;
 }
 
 .status {
@@ -212,6 +242,14 @@ function newTrip() {
 }
 
 .trip__tz {
+  color: var(--tm-muted);
+  font-size: var(--tm-text-xs);
+}
+
+.trip__members {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tm-space-1);
   color: var(--tm-muted);
   font-size: var(--tm-text-xs);
 }
