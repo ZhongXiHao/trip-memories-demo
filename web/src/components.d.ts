@@ -13,12 +13,16 @@ declare module 'vue' {
   export interface GlobalComponents {
     AppTopBar: typeof import('./components/AppTopBar.vue')['default']
     BoardHeader: typeof import('./components/BoardHeader.vue')['default']
+    CurrencyTag: typeof import('./components/CurrencyTag.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     VanButton: typeof import('vant/es')['Button']
+    VanCalendar: typeof import('vant/es')['Calendar']
     VanField: typeof import('vant/es')['Field']
     VanIcon: typeof import('vant/es')['Icon']
     VanLoading: typeof import('vant/es')['Loading']
+    VanPicker: typeof import('vant/es')['Picker']
     VanPopover: typeof import('vant/es')['Popover']
+    VanPopup: typeof import('vant/es')['Popup']
   }
 }

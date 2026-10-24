@@ -64,7 +64,7 @@ async function createAccount() {
     nicknameError.value = '请填写昵称'
     return
   }
-  if ([...name].length > NICKNAME_MAX) {
+  if (name.length > NICKNAME_MAX) {
     nicknameError.value = `昵称最多 ${NICKNAME_MAX} 个字`
     return
   }

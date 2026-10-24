@@ -23,6 +23,11 @@ const router = createRouter({
       name: 'home',
       component: () => import('@/views/HomeView.vue'),
     },
+    {
+      path: '/trips/new',
+      name: 'trip-new',
+      component: () => import('@/views/TripCreateView.vue'),
+    },
     { path: '/:pathMatch(.*)*', redirect: { name: 'home' } },
   ],
 })

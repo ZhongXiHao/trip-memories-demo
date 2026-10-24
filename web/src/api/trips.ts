@@ -18,8 +18,24 @@ export interface TripView {
   createdAt: string
 }
 
+/** 对应后端 TripRequest：创建和修改共用（修改是整体替换） */
+export interface TripRequest {
+  name: string
+  description?: string | null
+  displayCurrency: string
+  timezone: string
+  startDate?: string | null
+  endDate?: string | null
+}
+
 /** GET /trips：我在籍的、未删除的行程，后端已按创建时间倒序 */
 export async function listTrips(): Promise<TripView[]> {
   const { data } = await http.get<{ items: TripView[] }>('/trips')
   return data.items
+}
+
+/** POST /trips：创建者自动成为 Owner。校验失败是 400 VALIDATION_FAILED，fields 指向字段名。 */
+export async function createTrip(request: TripRequest): Promise<TripView> {
+  const { data } = await http.post<TripView>('/trips', request)
+  return data
 }

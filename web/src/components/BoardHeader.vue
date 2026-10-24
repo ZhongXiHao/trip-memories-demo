@@ -7,13 +7,21 @@ defineProps<{
   subtitle?: string
   /** PC 上和窄内容区（表单类页面）对齐，要和页面 <main> 的 tm-container--narrow 配套 */
   narrow?: boolean
+  /** 有值时在标题上方显示一个"返回"按钮，文字就是这个值（比如"我的行程"） */
+  backLabel?: string
 }>()
+
+defineEmits<{ back: [] }>()
 </script>
 
 <template>
   <header class="board-header">
     <div class="board-header__inner tm-container" :class="{ 'tm-container--narrow': narrow }">
       <div class="board-header__text">
+        <button v-if="backLabel" type="button" class="board-header__back" @click="$emit('back')">
+          <van-icon name="arrow-left" aria-hidden="true" />
+          <span>{{ backLabel }}</span>
+        </button>
         <h1 class="board-header__title">{{ title }}</h1>
         <p v-if="subtitle" class="board-header__subtitle">{{ subtitle }}</p>
       </div>
@@ -47,6 +55,25 @@ defineProps<{
   min-width: 0;
 }
 
+.board-header__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tm-space-1);
+  min-height: var(--tm-tap-min);
+  margin: calc(var(--tm-space-2) * -1) 0 0 calc(var(--tm-space-2) * -1);
+  padding: 0 var(--tm-space-2);
+  border: 0;
+  background: transparent;
+  color: rgb(255 255 255 / 80%);
+  font: inherit;
+  font-size: var(--tm-text-sm);
+  cursor: pointer;
+
+  &:hover {
+    color: #fff;
+  }
+}
+
 .board-header__title {
   margin: 0;
   font-size: var(--tm-text-xl);
@@ -67,11 +94,19 @@ defineProps<{
 
 @media (min-width: @bp-desktop) {
   .board-header {
-    padding-top: var(--tm-space-6);
+    padding-top: var(--tm-space-5);
     padding-bottom: var(--tm-space-2);
     background: transparent;
     border-bottom: 0;
     color: var(--tm-navy);
+  }
+
+  .board-header__back {
+    color: var(--tm-muted);
+
+    &:hover {
+      color: var(--tm-navy);
+    }
   }
 
   .board-header__subtitle {
