@@ -94,7 +94,8 @@ Trip 对象：
 
 1. 添加成员：POST /trips/{tripId}/members
    - 仅 Owner。请求体 `{"userId": 2}`。响应 201，返回成员对象。
-   - 该用户已是在籍成员 → 409 `ALREADY_MEMBER`；曾经退出过 → 重新加入，沿用原来的 `memberId`（历史账目还指着它），响应 200。
+   - `userId` 不存在 → 400 `VALIDATION_FAILED`（`fields` 指向 `userId`）；不用 404，因为 404 在这份契约里专指 Trip 不存在或你不是成员。
+   - 该用户已是在籍成员（包括 Owner 添加自己，以及并发地重复添加）→ 409 `ALREADY_MEMBER`；曾经退出过 → 重新加入，沿用原来的 `memberId`（历史账目还指着它），响应 200。
    - v1 只能添加真实用户，不支持规格里的「占位成员」。
 2. 成员退出：POST /trips/{tripId}/members/me/quit
    - 把自己设为已退出（`status = left`），不删行。

@@ -14,4 +14,8 @@ public interface UserMapper {
     @Insert("INSERT INTO app_user (nickname) VALUES (#{nickname})")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(NewUser user);
+
+
+    @Select("SELECT COUNT(*) > 0 FROM app_user WHERE id = #{id}")
+    boolean exists(long id);
 }

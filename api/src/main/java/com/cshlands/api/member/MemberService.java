@@ -1,6 +1,8 @@
 package com.cshlands.api.member;
 
 import com.cshlands.api.common.ApiException;
+import com.cshlands.api.user.UserMapper;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -10,9 +12,11 @@ import org.springframework.stereotype.Service;
 public class MemberService {
 
     private final MemberMapper memberMapper;
+    private final UserMapper userMapper;
 
-    MemberService(MemberMapper memberMapper) {
+    MemberService(MemberMapper memberMapper, UserMapper userMapper) {
         this.memberMapper = memberMapper;
+        this.userMapper = userMapper;
     }
 
     /**
@@ -44,6 +48,29 @@ public class MemberService {
             throw ApiException.forbidden("Only the owner can do this");
         }
         return member;
+    }
+
+    /**
+     * 仅 Owner。曾经退出的用户重新加入，沿用原 memberId；否则新建成员。
+     * 不先查"是不是成员"再决定，因为两个并发请求会同时查到"不是"。
+     * 每一步都是单条原子 SQL，由 uk_member_trip_user 唯一键裁决谁先谁后。
+     */
+    AddMemberResult addMember(long userId, long tripId, MemberRequest request) {
+        requireOwner(userId, tripId);
+        long newUserId = request.userId();
+        if (!userMapper.exists(newUserId)) {
+            throw ApiException.validationFailed("userId", "user not found");
+        }
+
+        boolean created = memberMapper.reactivate(newUserId, tripId) == 0;
+        if (created) {
+            try {
+                memberMapper.insert(new NewMember(tripId, newUserId, MemberRole.MEMBER, MemberStatus.ACTIVE));
+            } catch (DuplicateKeyException e) {
+                throw ApiException.conflict("ALREADY_MEMBER", "User is already a member of this trip");
+            }
+        }
+        return new AddMemberResult(memberMapper.findByUser(newUserId, tripId), created);
     }
 
 }
