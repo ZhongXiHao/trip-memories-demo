@@ -120,7 +120,7 @@ async function useExistingId() {
       <section aria-labelledby="saved-title">
         <h2 id="saved-title" class="section-title">这台设备用过的账号</h2>
 
-        <ul v-if="accounts.length" class="accounts">
+        <ul v-if="accounts.length" class="accounts" :class="{ 'accounts--has-current': session.userId !== null }">
           <li v-for="account in accounts" :key="account.id">
             <button
               type="button"
@@ -136,6 +136,7 @@ async function useExistingId() {
               </span>
               <van-loading v-if="busyAccountId === account.id" size="20" />
               <span v-else-if="account.id === session.userId" class="account__current">当前</span>
+              <van-icon v-else name="arrow" class="account__chevron" aria-hidden="true" />
             </button>
           </li>
         </ul>
@@ -241,10 +242,38 @@ async function useExistingId() {
     opacity: 0.6;
   }
 
+  // 当前账号：深色描边 + 右侧"当前"标签，不再叠加第三个信号
   &[aria-current='true'] {
     border-color: var(--tm-navy);
-    box-shadow: inset 3px 0 0 var(--tm-navy);
   }
+}
+
+// 已经有当前账号时，其余账号退到背景里：去掉白色卡片底，名字、首字母改用次要文字色。
+// 不能直接用 opacity：它会把文字对比度拉到 4.5:1 以下。次要文字色在页面底色上是 5.07:1，仍然达标。
+// 一个账号都没选过时（第一次进来）不淡化，它们就是主选项。
+.accounts--has-current .account:not([aria-current='true']) {
+  background: transparent;
+  border-color: var(--tm-line);
+
+  &:active:not(:disabled) {
+    background: var(--tm-surface);
+  }
+
+  .account__badge {
+    background: transparent;
+    border: 1px solid var(--tm-line);
+    color: var(--tm-muted);
+  }
+
+  .account__name {
+    color: var(--tm-muted);
+    font-weight: 500;
+  }
+}
+
+.account__chevron {
+  flex: none;
+  color: var(--tm-muted);
 }
 
 .account__badge {
