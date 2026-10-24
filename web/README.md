@@ -32,13 +32,39 @@ npm run dev       # http://localhost:5173
 
 ```
 src/
-  api/        按资源分文件的请求函数（trips.ts、members.ts…），只管发请求和类型
-  stores/     Pinia（当前用户、当前 Trip 等跨页面状态）
+  api/        请求层。http.ts 是唯一的 axios 实例；errors.ts 把所有失败统一成 ApiError；
+              session.ts 管"当前身份存在哪"；其余按资源分文件（users.ts、以后 trips.ts、members.ts…）
+  stores/     Pinia（当前身份、以后的当前 Trip 等跨页面状态）
   views/      路由页面
-  components/ 可复用组件
-  utils/      纯函数（金额、时间格式化等），适合写单元测试
-  router/     路由表
+  components/ 可复用组件（BoardHeader 等）
+  utils/      纯函数和小工具（金额、时间格式化、toast 等），适合写单元测试
+  router/     路由表和"没身份就去选择身份页"的守卫
+  styles/     tokens.less（设计令牌）、base.less（全局基础样式）
 ```
+
+写页面前先看 [`DESIGN.md`](./DESIGN.md)：配色、字号、间距、规则都在那里。
+
+## 请求怎么写
+
+接口函数只管发请求和声明类型，不处理错误提示：
+
+```ts
+// src/api/users.ts
+export async function getMe(): Promise<UserView> {
+  const { data } = await http.get<UserView>('/users/me')
+  return data
+}
+```
+
+调用方（页面或 store）用 `try/catch` 接 `ApiError`：用 `error.code` 判断情况，
+`error.fieldMessage('nickname')` 取字段错误，`showError(error)`（`utils/toast.ts`）弹统一的中文提示。
+收到 401 时 `http.ts` 会自动清掉身份并回到选择身份页，页面不用单独处理。
+
+## 开发期身份
+
+后端没有登录，靠请求头 `X-User-Id`（只在后端 dev profile 下认）。`/select-user` 页面可以创建开发用户
+（`POST /auth/register`，仅 dev 环境）、切换身份，已用过的账号记在浏览器本地。
+接入验证码登录后，这个页面会被登录页替换，`api/session.ts` 和 `http.ts` 是需要改的两处。
 
 ## 组件库和样式
 
