@@ -41,7 +41,7 @@
 
 1. 币别列表：GET /currencies
 
-响应 `{"items": [{"code": "JPY", "name": "日圓", "roundingUnit": 100}, ...]}`。`roundingUnit` 是存储单位下的取整单位：JPY、KRW 为 100（整元），其余为 1（到分）。前端据此决定显示几位小数。
+响应 `{"items": [{"code": "JPY", "name": "日元", "roundingUnit": 100}, ...]}`。`roundingUnit` 是存储单位下的取整单位：JPY、KRW 为 100（整元），其余为 1（到分）。前端据此决定显示几位小数。
 
 ## 用户与身份
 
