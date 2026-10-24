@@ -24,11 +24,28 @@ interface MemberMapper {
             "WHERE trip_id = #{tripId} AND user_id = #{userId} AND status = 'left'")
     int reactivate(@Param("userId") long userId, @Param("tripId") long tripId);
 
-    /** 按 (用户, Trip) 取成员对象，不论是否在籍；Trip 已删除时返回 null */
-    @Select("SELECT m.id AS member_id, u.id AS user_id, u.nickname, m.role, m.status, m.joined_at " +
+    /** 成员对象的查询（不论是否在籍）；Trip 已删除的查不到。后面接 WHERE 条件。 */
+    String MEMBER_VIEW_SELECT = "SELECT m.id AS member_id, u.id AS user_id, u.nickname, m.role, m.status, m.joined_at " +
             "FROM trip_member m " +
             "JOIN trip t ON t.id = m.trip_id AND t.deleted_at IS NULL " +
             "JOIN app_user u ON u.id = m.user_id " +
-            "WHERE m.trip_id = #{tripId} AND m.user_id = #{userId}")
+            "WHERE m.trip_id = #{tripId}";
+
+    /** 按 (用户, Trip) 取成员对象，不论是否在籍；Trip 已删除时返回 null */
+    @Select(MEMBER_VIEW_SELECT + " AND m.user_id = #{userId}")
     MemberView findByUser(@Param("userId") long userId, @Param("tripId") long tripId);
+
+    /** 按 (成员 id, Trip) 取成员对象，不论是否在籍；memberId 不属于这个 Trip 时返回 null */
+    @Select(MEMBER_VIEW_SELECT + " AND m.id = #{memberId}")
+    MemberView findById(@Param("memberId") long memberId, @Param("tripId") long tripId);
+
+    /** 把在籍的非 Owner 设为已退出（按 userId）；影响 0 行说明不在籍或是 Owner */
+    @Update("UPDATE trip_member SET status = 'left' " +
+            "WHERE trip_id = #{tripId} AND user_id = #{userId} AND status = 'active' AND role <> 'owner'")
+    int markLeft(@Param("userId") long userId, @Param("tripId") long tripId);
+
+    /** 同上，按成员 id；已退出的、Owner、不属于这个 Trip 的都影响 0 行 */
+    @Update("UPDATE trip_member SET status = 'left' " +
+            "WHERE trip_id = #{tripId} AND id = #{memberId} AND status = 'active' AND role <> 'owner'")
+    int markLeftById(@Param("memberId") long memberId, @Param("tripId") long tripId);
 }

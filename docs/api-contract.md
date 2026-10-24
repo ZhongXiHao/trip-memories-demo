@@ -100,8 +100,9 @@ Trip 对象：
 2. 成员退出：POST /trips/{tripId}/members/me/quit
    - 把自己设为已退出（`status = left`），不删行。
    - Owner 不能直接退出，须先转让 → 409 `OWNER_MUST_TRANSFER_FIRST`。
+   - 响应 200 `{"member": 成员对象, "warnings": [...]}`，`member.status` 是 `left`；`warnings` 的含义见下面「退出和踢走的共同规则」。退出后他已不是在籍成员，所以不能再重复调用（再调是 404）。
 3. 踢走成员：POST /trips/{tripId}/members/{memberId}/remove
-   - 仅 Owner。效果和退出一样，设为已退出。不能踢 Owner（含自己）→ 409 `CANNOT_REMOVE_OWNER`。对已退出的成员重复调用返回 200，不报错。
+   - 仅 Owner。效果和退出一样，设为已退出。不能踢 Owner（含自己）→ 409 `CANNOT_REMOVE_OWNER`。对已退出的成员重复调用返回 200，不报错（响应同退出，`warnings` 照常计算）。`{memberId}` 不属于这个 Trip → 404。
 4. 转让 Owner：POST /trips/{tripId}/owner/transfer/{memberId}
    - 仅当前 Owner，目标必须是在籍成员且不是自己。同一个事务里先把旧 Owner 降为 member，再升新 Owner（每个 Trip 只能有一个 Owner 的唯一约束要求这个顺序）。响应 200 `{"previousOwner": 成员对象, "newOwner": 成员对象}`。
 5. 列出成员：GET /trips/{tripId}/members

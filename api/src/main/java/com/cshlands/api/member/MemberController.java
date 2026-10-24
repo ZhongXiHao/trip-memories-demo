@@ -30,4 +30,14 @@ class MemberController {
         return ResponseEntity.status(status).body(result.member());
     }
 
+    @PostMapping("/members/me/quit")
+    MemberChangeResult quit(@PathVariable long tripId) {
+        return memberService.quit(CurrentUser.id(), tripId);
+    }
+
+    @PostMapping("/members/{memberId}/remove")
+    MemberChangeResult remove(@PathVariable long tripId, @PathVariable long memberId) {
+        return memberService.remove(CurrentUser.id(), tripId, memberId);
+    }
+
 }
