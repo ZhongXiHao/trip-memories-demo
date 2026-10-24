@@ -123,4 +123,42 @@ describe('session store', () => {
     expect(session.accounts).toEqual([])
     expect(session.userId).toBe(5)
   })
+
+  describe('ensureMe', () => {
+    it('fetches the user once even when called from several places at the same time', async () => {
+      setUserId(1)
+      vi.mocked(usersApi.getMe).mockResolvedValue(ken)
+      const session = useSessionStore()
+
+      await Promise.all([session.ensureMe(), session.ensureMe(), session.ensureMe()])
+
+      expect(usersApi.getMe).toHaveBeenCalledTimes(1)
+      expect(session.me).toEqual(ken)
+    })
+
+    it('does nothing when the user is already loaded or nobody is signed in', async () => {
+      const session = useSessionStore()
+      await session.ensureMe()
+      expect(usersApi.getMe).not.toHaveBeenCalled()
+
+      setUserId(1)
+      const signedIn = (setActivePinia(createPinia()), useSessionStore())
+      vi.mocked(usersApi.getMe).mockResolvedValue(ken)
+      await signedIn.ensureMe()
+      await signedIn.ensureMe()
+      expect(usersApi.getMe).toHaveBeenCalledTimes(1)
+    })
+
+    it('can be retried after a failure', async () => {
+      setUserId(1)
+      const session = useSessionStore()
+      vi.mocked(usersApi.getMe).mockRejectedValueOnce(new ApiError(0, 'NETWORK_ERROR', 'down'))
+      await expect(session.ensureMe()).rejects.toMatchObject({ code: 'NETWORK_ERROR' })
+
+      vi.mocked(usersApi.getMe).mockResolvedValueOnce(ken)
+      await session.ensureMe()
+
+      expect(session.me).toEqual(ken)
+    })
+  })
 })

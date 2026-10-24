@@ -114,9 +114,9 @@ async function useExistingId() {
 
 <template>
   <div class="select-user">
-    <BoardHeader title="选择身份" subtitle="开发期没有登录，先选一个账号，或创建新的。" />
+    <BoardHeader title="选择身份" subtitle="开发期没有登录，先选一个账号，或创建新的。" narrow />
 
-    <main class="select-user__main">
+    <main class="select-user__main tm-container tm-container--narrow">
       <section aria-labelledby="saved-title">
         <h2 id="saved-title" class="section-title">这台设备用过的账号</h2>
 
@@ -197,7 +197,8 @@ async function useExistingId() {
   display: flex;
   flex-direction: column;
   gap: var(--tm-space-5);
-  padding: var(--tm-space-5) var(--tm-space-4) calc(var(--tm-space-6) + env(safe-area-inset-bottom));
+  // 左右留白由 .tm-container 管，这里只设上下
+  padding-block: var(--tm-space-5) calc(var(--tm-space-6) + env(safe-area-inset-bottom));
 }
 
 .section-title {

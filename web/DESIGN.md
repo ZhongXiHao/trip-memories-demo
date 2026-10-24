@@ -44,7 +44,17 @@
 - **间距是 4 的倍数**（`--tm-space-1…6`）；字号只用 12 / 14 / 16 / 18 / 24。
 - **动效：** 只做"回应操作"的（按下反馈、展开、确认），不做页面进场动画。尊重 `prefers-reduced-motion`（`base.less` 已全局处理）。
 - **图标：** 只用 Vant 自带图标，不再引入第二套。
-- **桌面浏览器：** 应用居中限宽 480px，保持手机版式；两侧是深海军蓝。
+- **两套版式，断点 960px**（`styles/breakpoints.less`，组件里 `@import (reference)` 后用 `@bp-desktop`）：
+  - **< 960px（手机、平板竖屏）：** 单栏，最宽 480px 居中，两侧是深海军蓝。每页顶部是深色 `BoardHeader`。
+  - **≥ 960px（PC）：** 顶部通栏导航条 `AppTopBar`（左：品牌和导航，右上角：头像 + 昵称，点开是菜单：昵称/ID、切换身份、退出登录；
+    头像现在是空白用户图标 `user-o`，以后换真头像只改 `AppTopBar.vue` 里的 `.topbar__avatar`）。
+    导航条下面是最宽 1120px 的内容区（`--tm-page-max`）；表单类页面用更窄的 560px（`tm-container--narrow`）。
+    `BoardHeader` 在 PC 上退成内容区里的普通页面标题（不再画第二条深色带）。
+  - 页面的 `<main>` 加 `class="tm-container"`（表单页再加 `tm-container--narrow`，并给 `BoardHeader` 传 `narrow`），
+    左右留白和最大宽度都由它管；**页面自己的样式只设上下 padding**，否则会盖掉它。
+  - 只在手机上出现的控件（比如首页页头里的"切换身份"按钮）在 PC 上用 `@media (min-width: @bp-desktop)` 隐藏，
+    因为同样的功能已经在右上角头像菜单里。
+  - 导航项现在只有"我的行程"，以后的页面往 `AppTopBar.vue` 的 `topbar__links` 里加。
 - **每个页面一个主操作。** 次要操作用描边按钮或文字按钮。
 - **错误文案：** 说明发生了什么、怎么办，不道歉、不含糊。统一走 `describeError`（`src/api/errors.ts`），表单字段错误挂在对应输入框下。
 

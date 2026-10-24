@@ -1,5 +1,7 @@
 // 全局基础样式：只放跨页面的东西，页面自己的样式写在各自的 .vue 里。
 
+@import (reference) './breakpoints.less';
+
 *,
 *::before,
 *::after {
@@ -12,7 +14,7 @@ html {
 
 body {
   margin: 0;
-  background: var(--tm-navy);   // 桌面宽屏时两侧露出的是深色，应用本体居中
+  background: var(--tm-navy);   // 平板宽度（480–960px）时两侧露出的是深色，应用本体居中
   color: var(--tm-navy);
   font-family: var(--tm-font-sans);
   font-size: var(--tm-text-md);
@@ -25,6 +27,34 @@ body {
   min-height: 100dvh;           // 手机浏览器的地址栏伸缩时，100vh 会多出一截
   margin: 0 auto;
   background: var(--tm-board);
+}
+
+// 内容区容器：页面的 <main> 用它来决定左右留白和（PC 上的）最大宽度。
+// 页面自己的样式只设上下 padding，不要再设左右 padding，否则会盖掉这里。
+.tm-container {
+  padding-inline: var(--tm-space-4);
+}
+
+@media (min-width: @bp-desktop) {
+  body {
+    background: var(--tm-board);
+  }
+
+  #app {
+    max-width: none;
+  }
+
+  .tm-container {
+    width: 100%;
+    max-width: var(--tm-page-max);
+    margin-inline: auto;
+    padding-inline: var(--tm-space-5);
+  }
+
+  // 表单类页面：内容区更窄，不要拉得太宽
+  .tm-container--narrow {
+    max-width: var(--tm-page-narrow);
+  }
 }
 
 // 可点击元素：去掉 300ms 延迟，键盘聚焦时有清晰的焦点环

@@ -80,6 +80,20 @@ export const useSessionStore = defineStore('session', () => {
     me.value = await getMe()
   }
 
+  let pendingMe: Promise<void> | null = null
+
+  /**
+   * 有身份但还没取过用户信息时才取；多处同时调用（顶部导航条、页面）只发一次请求。
+   * 已经取过就什么都不做。
+   */
+  function ensureMe(): Promise<void> {
+    if (userId.value === null || me.value !== null) return Promise.resolve()
+    pendingMe ??= refreshMe().finally(() => {
+      pendingMe = null
+    })
+    return pendingMe
+  }
+
   /** 只清本地状态，不通知后端（开发期没有会话） */
   function signOut(): void {
     clearUserId()
@@ -93,5 +107,5 @@ export const useSessionStore = defineStore('session', () => {
     saveAccounts(accounts.value)
   }
 
-  return { userId, me, accounts, signInAs, register, refreshMe, signOut, forget }
+  return { userId, me, accounts, signInAs, register, refreshMe, ensureMe, signOut, forget }
 })
