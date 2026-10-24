@@ -1,17 +1,30 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { showToast } from 'vant'
+import 'vant/es/toast/style'
 
 import { describeError, toApiError } from '@/api/errors'
-import { listMembers, type MemberView } from '@/api/members'
+import {
+  listMembers,
+  quitTrip,
+  removeMember,
+  transferOwner,
+  type MemberChange,
+  type MemberView,
+} from '@/api/members'
 import { getTrip, type TripView } from '@/api/trips'
+import AddMemberPopup from '@/components/AddMemberPopup.vue'
 import BoardHeader from '@/components/BoardHeader.vue'
 import CurrencyTag from '@/components/CurrencyTag.vue'
+import TripMembers from '@/components/TripMembers.vue'
 import { formatDateRange } from '@/utils/date'
+import { confirmAction } from '@/utils/dialog'
 import { roleLabel, splitMembers } from '@/utils/members'
 import { timezoneLabel } from '@/utils/timezones'
+import { showError } from '@/utils/toast'
 
-// 行程详情：行程信息 + 成员。支出、欠款和还款等后端接口做好后再加。
+// 行程详情：行程信息 + 成员管理。支出、欠款和还款等后端接口做好后再加。
 const props = defineProps<{ tripId: number }>()
 
 const router = useRouter()
@@ -21,11 +34,15 @@ const state = ref<State>('loading')
 const errorMessage = ref('')
 const trip = ref<TripView | null>(null)
 const members = ref<MemberView[]>([])
+const busy = ref(false)
+const showAdd = ref(false)
 
 const groups = computed(() => splitMembers(members.value))
+const isOwner = computed(() => trip.value?.myRole === 'owner')
 
-async function load() {
-  state.value = 'loading'
+/** silent：操作之后刷新数据时不闪"正在加载"，页面保持原样直到新数据到达 */
+async function load(silent = false) {
+  if (!silent) state.value = 'loading'
   try {
     // 行程和成员一起取；不是在籍成员时两个都是 404，按"找不到"处理
     const [loadedTrip, loadedMembers] = await Promise.all([getTrip(props.tripId), listMembers(props.tripId)])
@@ -38,19 +55,92 @@ async function load() {
     if (apiError.status === 401) return
     if (apiError.status === 404) {
       state.value = 'not-found'
-    } else {
+    } else if (!silent) {
       errorMessage.value = describeError(apiError)
       state.value = 'error'
+    } else {
+      showError(apiError)
     }
   }
 }
 
-onMounted(load)
+onMounted(() => load())
 // 同一个页面组件里从一个行程切到另一个（地址栏改 id）时重新加载
-watch(() => props.tripId, load)
+watch(() => props.tripId, () => load())
 
 function goList() {
   router.push({ name: 'home' })
+}
+
+/** 退出、移出时后端可能带提醒（比如还有没结清的欠款）。只提醒，不影响操作结果。 */
+function showWarnings(change: MemberChange) {
+  const first = change.warnings[0]
+  if (first) showToast({ message: first.message, duration: 4000 })
+}
+
+/**
+ * 执行一个会改数据的操作：期间禁用按钮；失败统一提示，并刷新一遍
+ * （最常见的失败是别人刚好改了成员关系，刷新后页面就和实际一致了）。
+ */
+async function runAction(action: () => Promise<void>) {
+  if (busy.value) return
+  busy.value = true
+  try {
+    await action()
+  } catch (error) {
+    const apiError = toApiError(error)
+    if (apiError.status === 401) return
+    showError(apiError)
+    await load(true)
+  } finally {
+    busy.value = false
+  }
+}
+
+async function onTransfer(member: MemberView) {
+  const ok = await confirmAction({
+    title: `把负责人转让给 ${member.nickname}？`,
+    message: '转让后你会变成普通成员，不能再编辑、删除这个行程，也不能管理成员。',
+    confirmText: '转让',
+  })
+  if (!ok) return
+  await runAction(async () => {
+    await transferOwner(props.tripId, member.memberId)
+    showToast({ message: `负责人已转让给 ${member.nickname}`, type: 'success' })
+    await load(true)
+  })
+}
+
+async function onRemove(member: MemberView) {
+  const ok = await confirmAction({
+    title: `把 ${member.nickname} 移出行程？`,
+    message: '他将看不到这个行程。他记过的账目会保留，之后你也可以再把他添加回来。',
+    confirmText: '移出',
+    danger: true,
+  })
+  if (!ok) return
+  await runAction(async () => {
+    const change = await removeMember(props.tripId, member.memberId)
+    showToast({ message: `已移出 ${member.nickname}`, type: 'success' })
+    showWarnings(change)
+    await load(true)
+  })
+}
+
+async function onQuit() {
+  const ok = await confirmAction({
+    title: '退出这个行程？',
+    message: '退出后你将看不到它。你记过的账目会保留，负责人之后可以再把你添加回来。',
+    confirmText: '退出',
+    danger: true,
+  })
+  if (!ok) return
+  await runAction(async () => {
+    const change = await quitTrip(props.tripId)
+    showToast({ message: '已退出行程', type: 'success' })
+    showWarnings(change)
+    await router.replace({ name: 'home' })
+  })
 }
 </script>
 
@@ -76,61 +166,54 @@ function goList() {
 
       <div v-else-if="state === 'error'" class="status status--box" role="alert">
         <p class="status__text">{{ errorMessage }}</p>
-        <van-button size="small" plain type="primary" @click="load">重试</van-button>
+        <van-button size="small" plain type="primary" @click="load()">重试</van-button>
       </div>
 
       <div v-else-if="trip" class="grid">
-        <section class="card info" aria-label="行程信息">
-          <p v-if="trip.description" class="info__description">{{ trip.description }}</p>
-          <dl class="facts">
-            <div class="facts__row">
-              <dt>时区</dt>
-              <dd>{{ timezoneLabel(trip.timezone) }}</dd>
-            </div>
-            <div class="facts__row">
-              <dt>展示币别</dt>
-              <dd><CurrencyTag :code="trip.displayCurrency" /></dd>
-            </div>
-            <div class="facts__row">
-              <dt>我的身份</dt>
-              <dd>{{ roleLabel(trip.myRole) }}</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section class="members" aria-labelledby="members-title">
-          <h2 id="members-title" class="section-title">
-            成员 <span class="section-title__count tm-num">{{ groups.active.length }}</span>
-          </h2>
-
-          <ul class="member-list">
-            <li v-for="member in groups.active" :key="member.memberId" class="member">
-              <div class="member__text">
-                <span class="member__name">{{ member.nickname }}</span>
-                <span class="member__id tm-num">ID {{ member.userId }}</span>
+        <div class="side">
+          <section class="card" aria-label="行程信息">
+            <p v-if="trip.description" class="info__description">{{ trip.description }}</p>
+            <dl class="facts">
+              <div class="facts__row">
+                <dt>时区</dt>
+                <dd>{{ timezoneLabel(trip.timezone) }}</dd>
               </div>
-              <span v-if="member.memberId === trip.myMemberId" class="tag">我</span>
-              <span v-if="member.role === 'owner'" class="tag tag--strong">{{ roleLabel(member.role) }}</span>
-            </li>
-          </ul>
+              <div class="facts__row">
+                <dt>展示币别</dt>
+                <dd><CurrencyTag :code="trip.displayCurrency" /></dd>
+              </div>
+              <div class="facts__row">
+                <dt>我的身份</dt>
+                <dd>{{ roleLabel(trip.myRole) }}</dd>
+              </div>
+            </dl>
+          </section>
 
-          <details v-if="groups.left.length" class="left">
-            <summary class="left__summary">已退出的成员（{{ groups.left.length }}）</summary>
-            <ul class="member-list member-list--left">
-              <li v-for="member in groups.left" :key="member.memberId" class="member member--left">
-                <div class="member__text">
-                  <span class="member__name">{{ member.nickname }}</span>
-                  <span class="member__id tm-num">ID {{ member.userId }}</span>
-                </div>
-                <span class="tag">已退出</span>
-              </li>
-            </ul>
-          </details>
-        </section>
+          <div class="leave">
+            <template v-if="isOwner">
+              <p class="leave__note">你是负责人。想退出，要先把负责人转让给别的成员。</p>
+            </template>
+            <van-button v-else plain type="danger" block :disabled="busy" @click="onQuit">退出行程</van-button>
+          </div>
+        </div>
 
-        <p class="soon">支出、欠款和还款马上就做。</p>
+        <div class="main">
+          <TripMembers
+            :active="groups.active"
+            :left="groups.left"
+            :my-member-id="trip.myMemberId"
+            :is-owner="isOwner"
+            :busy="busy"
+            @add="showAdd = true"
+            @transfer="onTransfer"
+            @remove="onRemove"
+          />
+          <p class="soon">支出、欠款和还款马上就做。</p>
+        </div>
       </div>
     </main>
+
+    <AddMemberPopup v-model:show="showAdd" :trip-id="tripId" @added="load(true)" />
   </div>
 </template>
 
@@ -169,19 +252,33 @@ function goList() {
   gap: var(--tm-space-5);
 }
 
+.side,
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tm-space-5);
+}
+
 @media (min-width: @bp-desktop) {
   .grid {
     grid-template-columns: 320px minmax(0, 1fr);
     align-items: start;
   }
 
-  .info {
+  .side {
     position: sticky;
     top: calc(var(--tm-topbar-h) + var(--tm-space-4));
   }
+}
 
-  .soon {
-    grid-column: 2;
+// 手机上"退出行程"放在最下面，不要紧挨着成员列表
+@media (max-width: (@bp-desktop - 1px)) {
+  .side {
+    display: contents;
+  }
+
+  .leave {
+    order: 3;
   }
 }
 
@@ -222,101 +319,9 @@ function goList() {
   }
 }
 
-.section-title {
-  margin: 0 0 var(--tm-space-2);
-  font-size: var(--tm-text-md);
-  font-weight: 600;
-}
-
-.section-title__count {
-  margin-left: var(--tm-space-1);
-  color: var(--tm-muted);
-  font-size: var(--tm-text-sm);
-}
-
-.member-list {
-  display: flex;
-  flex-direction: column;
+.leave__note {
   margin: 0;
-  padding: 0;
-  border: 1px solid var(--tm-line);
-  border-radius: var(--tm-radius-card);
-  background: var(--tm-surface);
-  list-style: none;
-}
-
-.member {
-  display: flex;
-  align-items: center;
-  gap: var(--tm-space-2);
-  min-height: 56px;
-  padding: var(--tm-space-2) var(--tm-space-4);
-
-  & + & {
-    border-top: 1px solid var(--tm-line);
-  }
-}
-
-.member__text {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.member__name {
-  overflow: hidden;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.member__id {
   color: var(--tm-muted);
   font-size: var(--tm-text-xs);
-}
-
-.tag {
-  flex: none;
-  padding: 0 var(--tm-space-2);
-  border: 1px solid var(--tm-line);
-  border-radius: var(--tm-radius-tag);
-  color: var(--tm-muted);
-  font-size: var(--tm-text-xs);
-  line-height: 20px;
-}
-
-.tag--strong {
-  border-color: var(--tm-navy);
-  color: var(--tm-navy);
-  font-weight: 600;
-}
-
-.left {
-  margin-top: var(--tm-space-3);
-}
-
-.left__summary {
-  display: flex;
-  align-items: center;
-  min-height: var(--tm-tap-min);
-  color: var(--tm-muted);
-  font-size: var(--tm-text-sm);
-  cursor: pointer;
-}
-
-// 已退出的成员：文字用次要色（对比度仍达标）+ "已退出"标签，不靠颜色单独表达
-.member--left .member__name {
-  color: var(--tm-muted);
-  font-weight: 500;
-}
-
-.soon {
-  margin: 0;
-  padding: var(--tm-space-4);
-  border: 1px dashed var(--tm-line);
-  border-radius: var(--tm-radius-card);
-  color: var(--tm-muted);
-  font-size: var(--tm-text-sm);
 }
 </style>

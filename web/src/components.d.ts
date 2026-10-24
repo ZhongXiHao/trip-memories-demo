@@ -11,11 +11,14 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AddMemberPopup: typeof import('./components/AddMemberPopup.vue')['default']
     AppTopBar: typeof import('./components/AppTopBar.vue')['default']
     BoardHeader: typeof import('./components/BoardHeader.vue')['default']
     CurrencyTag: typeof import('./components/CurrencyTag.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    TripMembers: typeof import('./components/TripMembers.vue')['default']
+    VanActionSheet: typeof import('vant/es')['ActionSheet']
     VanButton: typeof import('vant/es')['Button']
     VanCalendar: typeof import('vant/es')['Calendar']
     VanField: typeof import('vant/es')['Field']
