@@ -1,0 +1,57 @@
+// 全局基础样式：只放跨页面的东西，页面自己的样式写在各自的 .vue 里。
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--tm-navy);   // 桌面宽屏时两侧露出的是深色，应用本体居中
+  color: var(--tm-navy);
+  font-family: var(--tm-font-sans);
+  font-size: var(--tm-text-md);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  max-width: var(--tm-app-max-width);
+  min-height: 100dvh;           // 手机浏览器的地址栏伸缩时，100vh 会多出一截
+  margin: 0 auto;
+  background: var(--tm-board);
+}
+
+// 可点击元素：去掉 300ms 延迟，键盘聚焦时有清晰的焦点环
+button,
+a,
+[role='button'] {
+  touch-action: manipulation;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--tm-ring);
+}
+
+// 金额、币别代码、ID：等宽数字
+.tm-num {
+  font-family: var(--tm-font-num);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+// 用户开了"减少动态效果"就把过渡全部关掉
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

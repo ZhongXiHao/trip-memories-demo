@@ -15,6 +15,7 @@
     "lint:eslint": "eslint . --fix --cache"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.3.0",
     "axios": "^1.20.0",
     "pinia": "^3.0.4",
     "vant": "^4.10.2",
