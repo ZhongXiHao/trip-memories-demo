@@ -144,6 +144,27 @@ public class MemberService {
                 memberMapper.findById(memberId, tripId));
     }
 
+    /** 在籍成员可看；包含已退出的成员，status 为 null 时不过滤 */
+    List<MemberView> list(long userId, long tripId, MemberStatus status) {
+        requireActiveMember(userId, tripId);
+        return memberMapper.list(tripId, status);
+    }
+
+    /** 在籍成员可看这个 Trip 里的任何成员（含已退出的）；memberId 不属于这个 Trip → 404 */
+    MemberView get(long userId, long tripId, long memberId) {
+        requireActiveMember(userId, tripId);
+        MemberView member = memberMapper.findById(memberId, tripId);
+        if (member == null) {
+            throw ApiException.notFound();
+        }
+        return member;
+    }
+
+    /** 路径里写 me 时：当前用户在这个 Trip 里的成员 */
+    MemberView getMe(long userId, long tripId) {
+        return get(userId, tripId, requireActiveMember(userId, tripId).memberId());
+    }
+
     private static ApiException memberLeft() {
         return new ApiException(HttpStatus.BAD_REQUEST, "MEMBER_LEFT", "The target member has left the trip");
     }

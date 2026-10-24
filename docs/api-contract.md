@@ -108,8 +108,9 @@ Trip 对象：
    - 目标是自己 → 400 `VALIDATION_FAILED`（`fields` 指向 `memberId`）；目标已退出（含并发时刚好退出）→ 400 `MEMBER_LEFT`；`{memberId}` 不属于这个 Trip → 404；调用者不是 Owner → 403。
    - 两个转让并发时只有一个成功，另一个因为发起人已不是 Owner 而得到 403，任何时候 Trip 都恰好有一个 Owner。
 5. 列出成员：GET /trips/{tripId}/members
-   - 响应 `{"items": [成员对象]}`，包含已退出的成员，靠 `status` 区分；可用 `?status=active` 只看在籍的。Agent 用它把「Ken」「大家」翻译成 `memberId`。
+   - 在籍成员可看。响应 `{"items": [成员对象]}`，包含已退出的成员，靠 `status` 区分，按 `memberId` 升序；可用 `?status=active`（或 `left`）过滤，值不认识 → 400 `VALIDATION_FAILED`（`fields` 指向 `status`）。Agent 用它把「Ken」「大家」翻译成 `memberId`。
 6. 查看 Trip 内其他成员信息：GET /trips/{tripId}/members/{memberId}，响应成员对象
+   - 在籍成员可看这个 Trip 里的任何成员，包括已退出的（历史账目还指着他）。`{memberId}` 不属于这个 Trip → 404；既不是数字也不是 `me` → 400 `VALIDATION_FAILED`。
 
 **退出和踢走的共同规则**
 

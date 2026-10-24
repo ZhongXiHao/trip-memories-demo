@@ -2,6 +2,8 @@ package com.cshlands.api.member;
 
 import org.apache.ibatis.annotations.*;
 
+import java.util.List;
+
 @Mapper
 interface MemberMapper {
 
@@ -38,6 +40,10 @@ interface MemberMapper {
     /** 按 (成员 id, Trip) 取成员对象，不论是否在籍；memberId 不属于这个 Trip 时返回 null */
     @Select(MEMBER_VIEW_SELECT + " AND m.id = #{memberId}")
     MemberView findById(@Param("memberId") long memberId, @Param("tripId") long tripId);
+
+    /** 这个 Trip 的全部成员（含已退出），按 memberId 升序；status 为 null 时不过滤 */
+    @Select(MEMBER_VIEW_SELECT + " AND (#{status} IS NULL OR m.status = #{status}) ORDER BY m.id")
+    List<MemberView> list(@Param("tripId") long tripId, @Param("status") MemberStatus status);
 
     /** 把在籍的非 Owner 设为已退出（按 userId）；影响 0 行说明不在籍或是 Owner */
     @Update("UPDATE trip_member SET status = 'left' " +
