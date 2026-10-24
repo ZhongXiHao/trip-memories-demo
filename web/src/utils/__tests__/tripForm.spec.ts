@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/api/errors'
+import type { TripView } from '@/api/trips'
 
 import {
   DESCRIPTION_MAX,
   NAME_MAX,
   serverFieldErrors,
   toTripRequest,
+  tripToFormState,
   validateTripForm,
   type TripFormState,
 } from '../tripForm'
@@ -62,6 +64,51 @@ describe('toTripRequest', () => {
   it('passes dates and description through', () => {
     const request = toTripRequest({ ...valid, description: ' 吃吃吃 ', startDate: '2026-10-01', endDate: '2026-10-05' })
     expect(request).toMatchObject({ description: '吃吃吃', startDate: '2026-10-01', endDate: '2026-10-05' })
+  })
+})
+
+describe('tripToFormState', () => {
+  const trip: TripView = {
+    id: 7,
+    name: '东京五日游',
+    description: null,
+    startDate: null,
+    endDate: null,
+    timezone: 'Asia/Tokyo',
+    displayCurrency: 'JPY',
+    myMemberId: 3,
+    myRole: 'owner',
+    createdAt: '2026-10-24T08:00:00.000Z',
+  }
+
+  it('turns the backend nulls into empty strings for the form', () => {
+    expect(tripToFormState(trip)).toEqual({
+      name: '东京五日游',
+      description: '',
+      displayCurrency: 'JPY',
+      timezone: 'Asia/Tokyo',
+      startDate: '',
+      endDate: '',
+    })
+  })
+
+  it('round-trips: editing nothing produces the same request the trip already has', () => {
+    const full: TripView = { ...trip, description: '吃吃吃', startDate: '2026-10-01', endDate: '2026-10-05' }
+
+    expect(toTripRequest(tripToFormState(full))).toEqual({
+      name: '东京五日游',
+      description: '吃吃吃',
+      displayCurrency: 'JPY',
+      timezone: 'Asia/Tokyo',
+      startDate: '2026-10-01',
+      endDate: '2026-10-05',
+    })
+    // PUT 是整体替换：没有日期的行程，保存后仍然没有日期（null），不是别的值
+    expect(toTripRequest(tripToFormState(trip))).toMatchObject({ description: null, startDate: null, endDate: null })
+  })
+
+  it('an unchanged trip passes the same validation the backend applies', () => {
+    expect(validateTripForm(tripToFormState(trip))).toEqual({})
   })
 })
 

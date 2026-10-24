@@ -13,7 +13,7 @@ import {
   type MemberChange,
   type MemberView,
 } from '@/api/members'
-import { getTrip, type TripView } from '@/api/trips'
+import { deleteTrip, getTrip, type TripView } from '@/api/trips'
 import AddMemberPopup from '@/components/AddMemberPopup.vue'
 import BoardHeader from '@/components/BoardHeader.vue'
 import CurrencyTag from '@/components/CurrencyTag.vue'
@@ -72,6 +72,10 @@ function goList() {
   router.push({ name: 'home' })
 }
 
+function goEdit() {
+  router.push({ name: 'trip-edit', params: { tripId: props.tripId } })
+}
+
 /** 退出、移出时后端可能带提醒（比如还有没结清的欠款）。只提醒，不影响操作结果。 */
 function showWarnings(change: MemberChange) {
   const first = change.warnings[0]
@@ -127,6 +131,23 @@ async function onRemove(member: MemberView) {
   })
 }
 
+async function onDelete() {
+  if (!trip.value) return
+  const name = trip.value.name
+  const ok = await confirmAction({
+    title: `删除“${name}”？`,
+    message: '所有成员都将看不到这个行程。',
+    confirmText: '删除',
+    danger: true,
+  })
+  if (!ok) return
+  await runAction(async () => {
+    await deleteTrip(props.tripId)
+    showToast({ message: `已删除“${name}”`, type: 'success' })
+    await router.replace({ name: 'home' })
+  })
+}
+
 async function onQuit() {
   const ok = await confirmAction({
     title: '退出这个行程？',
@@ -151,7 +172,11 @@ async function onQuit() {
       :subtitle="trip ? formatDateRange(trip.startDate, trip.endDate) : undefined"
       back-label="我的行程"
       @back="goList"
-    />
+    >
+      <template #action>
+        <van-button v-if="isOwner" size="small" plain class="edit" :disabled="busy" @click="goEdit">编辑</van-button>
+      </template>
+    </BoardHeader>
 
     <main class="detail tm-container">
       <div v-if="state === 'loading'" class="status" role="status">
@@ -192,6 +217,7 @@ async function onQuit() {
           <div class="leave">
             <template v-if="isOwner">
               <p class="leave__note">你是负责人。想退出，要先把负责人转让给别的成员。</p>
+              <van-button plain type="danger" block :disabled="busy" @click="onDelete">删除行程</van-button>
             </template>
             <van-button v-else plain type="danger" block :disabled="busy" @click="onQuit">退出行程</van-button>
           </div>
@@ -319,9 +345,40 @@ async function onQuit() {
   }
 }
 
+.leave {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tm-space-3);
+}
+
 .leave__note {
   margin: 0;
   color: var(--tm-muted);
   font-size: var(--tm-text-xs);
+}
+
+// 页头里的"编辑"：手机上页头是深色（白字白边）；PC 上页头变成普通标题区，改成主色描边
+.edit {
+  min-height: var(--tm-tap-min);
+  padding: 0 var(--tm-space-4);
+  border-color: rgb(255 255 255 / 60%);
+  background: transparent;
+  color: #fff;
+}
+
+@media (min-width: @bp-desktop) {
+  .edit {
+    border-color: var(--tm-primary);
+    color: var(--tm-primary);
+  }
+}
+
+.soon {
+  margin: 0;
+  padding: var(--tm-space-4);
+  border: 1px dashed var(--tm-line);
+  border-radius: var(--tm-radius-card);
+  color: var(--tm-muted);
+  font-size: var(--tm-text-sm);
 }
 </style>

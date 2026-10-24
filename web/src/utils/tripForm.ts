@@ -1,5 +1,5 @@
 import { ApiError } from '@/api/errors'
-import type { TripRequest } from '@/api/trips'
+import type { TripRequest, TripView } from '@/api/trips'
 
 import { tripDays } from './date'
 
@@ -64,4 +64,16 @@ export function serverFieldErrors(error: ApiError): TripFormErrors {
     if (known) errors[known.field] = known.message
   }
   return errors
+}
+
+/** 行程 → 编辑表单的初始值：后端的 null 在表单里是空字符串 */
+export function tripToFormState(trip: TripView): TripFormState {
+  return {
+    name: trip.name,
+    description: trip.description ?? '',
+    displayCurrency: trip.displayCurrency,
+    timezone: trip.timezone,
+    startDate: trip.startDate ?? '',
+    endDate: trip.endDate ?? '',
+  }
 }

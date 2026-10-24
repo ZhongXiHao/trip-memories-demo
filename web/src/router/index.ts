@@ -35,6 +35,12 @@ const router = createRouter({
       component: () => import('@/views/TripDetailView.vue'),
       props: (route) => ({ tripId: Number(route.params.tripId) }),
     },
+    {
+      path: '/trips/:tripId(\\d+)/edit',
+      name: 'trip-edit',
+      component: () => import('@/views/TripEditView.vue'),
+      props: (route) => ({ tripId: Number(route.params.tripId) }),
+    },
     { path: '/:pathMatch(.*)*', redirect: { name: 'home' } },
   ],
 })

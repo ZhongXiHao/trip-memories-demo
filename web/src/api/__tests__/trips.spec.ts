@@ -2,7 +2,7 @@ import { AxiosHeaders, type AxiosAdapter, type InternalAxiosRequestConfig } from
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { http } from '../http'
-import { createTrip, getTrip, listTrips, type TripRequest, type TripView } from '../trips'
+import { createTrip, deleteTrip, getTrip, listTrips, updateTrip, type TripRequest, type TripView } from '../trips'
 
 const trip: TripView = {
   id: 7,
@@ -68,5 +68,19 @@ describe('trips api', () => {
     await createTrip(request)
 
     expect(seen).toMatchObject({ method: 'post', url: '/trips', body: request })
+  })
+
+  it('updateTrip is a PUT of the full body (a replace, not a patch)', async () => {
+    http.defaults.adapter = fakeServer(200, trip, seen)
+
+    expect(await updateTrip(7, request)).toEqual(trip)
+    expect(seen).toMatchObject({ method: 'put', url: '/trips/7', body: request })
+  })
+
+  it('deleteTrip is a POST to /delete (soft delete) and returns nothing', async () => {
+    http.defaults.adapter = fakeServer(204, '', seen)
+
+    expect(await deleteTrip(7)).toBeUndefined()
+    expect(seen).toMatchObject({ method: 'post', url: '/trips/7/delete' })
   })
 })

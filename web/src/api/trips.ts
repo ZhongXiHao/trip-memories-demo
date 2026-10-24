@@ -45,3 +45,17 @@ export async function createTrip(request: TripRequest): Promise<TripView> {
   const { data } = await http.post<TripView>('/trips', request)
   return data
 }
+
+/**
+ * PUT /trips/{tripId}：仅负责人，整体替换（没传的可选字段会被清空，不是保留旧值）。
+ * 校验规则和创建一样；不是负责人 → 403，不是成员 → 404。
+ */
+export async function updateTrip(tripId: number, request: TripRequest): Promise<TripView> {
+  const { data } = await http.put<TripView>(`/trips/${tripId}`, request)
+  return data
+}
+
+/** POST /trips/{tripId}/delete：仅负责人，软删除，成功返回 204。之后这个行程对所有成员都是 404。 */
+export async function deleteTrip(tripId: number): Promise<void> {
+  await http.post(`/trips/${tripId}/delete`)
+}

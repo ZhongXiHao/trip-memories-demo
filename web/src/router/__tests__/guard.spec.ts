@@ -73,4 +73,19 @@ describe('trip routes', () => {
 
     expect(router.currentRoute.value.name).toBe('home')
   })
+
+  it('/trips/12/edit is the edit page and passes the id as a number', async () => {
+    await router.push('/trips/12/edit')
+
+    const route = router.currentRoute.value
+    expect(route.name).toBe('trip-edit')
+    const props = router.getRoutes().find((r) => r.name === 'trip-edit')!.props.default as (r: typeof route) => unknown
+    expect(props(route)).toEqual({ tripId: 12 })
+  })
+
+  it('the edit page also only accepts a numeric id', async () => {
+    await router.push('/trips/abc/edit')
+
+    expect(router.currentRoute.value.name).toBe('home')
+  })
 })

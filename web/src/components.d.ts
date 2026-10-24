@@ -17,6 +17,7 @@ declare module 'vue' {
     CurrencyTag: typeof import('./components/CurrencyTag.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    TripForm: typeof import('./components/TripForm.vue')['default']
     TripMembers: typeof import('./components/TripMembers.vue')['default']
     VanActionSheet: typeof import('vant/es')['ActionSheet']
     VanButton: typeof import('vant/es')['Button']
