@@ -1,50 +1,76 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
 
+import { toApiError, describeError } from '@/api/errors'
+import { listTrips, type TripView } from '@/api/trips'
 import BoardHeader from '@/components/BoardHeader.vue'
+import CurrencyTag from '@/components/CurrencyTag.vue'
 import { useSessionStore } from '@/stores/session'
-import { showError } from '@/utils/toast'
+import { formatDateRange } from '@/utils/date'
+import { timezoneLabel } from '@/utils/timezones'
 
-// 占位首页：行程列表在下一步做。现在只展示当前身份。
+// 我的行程：当前用户在籍的行程，后端已按创建时间倒序。
 const session = useSessionStore()
-const router = useRouter()
 
-onMounted(async () => {
+type State = 'loading' | 'ready' | 'error'
+const state = ref<State>('loading')
+const trips = ref<TripView[]>([])
+const errorMessage = ref('')
+
+const isEmpty = computed(() => state.value === 'ready' && trips.value.length === 0)
+
+async function load() {
+  state.value = 'loading'
   try {
-    await session.ensureMe()
+    trips.value = await listTrips()
+    state.value = 'ready'
   } catch (error) {
-    // 401 已经由 http.ts 的拦截器处理（清身份并跳去选择页），这里不再重复提示
-    if (session.userId !== null) showError(error)
+    const apiError = toApiError(error)
+    // 401 已经由 http.ts 的拦截器处理（清身份并跳去选择页），不用在这里显示
+    if (apiError.status === 401) return
+    errorMessage.value = describeError(apiError)
+    state.value = 'error'
   }
-})
-
-function switchUser() {
-  router.push({ name: 'select-user' })
 }
+
+onMounted(() => {
+  // 顶部导航条和这里都要用户信息，ensureMe 保证只请求一次；失败不影响列表
+  session.ensureMe().catch(() => undefined)
+  load()
+})
 </script>
 
 <template>
   <div>
-    <BoardHeader title="我的行程">
-      <template #action>
-        <!-- 手机上放在页头；PC 上切换身份在右上角头像菜单里，这里隐藏 -->
-        <van-button size="small" plain hairline type="default" class="switch" @click="switchUser">
-          切换身份
-        </van-button>
-      </template>
-    </BoardHeader>
+    <BoardHeader title="我的行程" />
 
     <main class="home tm-container">
-      <section class="me" aria-label="当前身份">
-        <template v-if="session.me">
-          <span class="me__name">{{ session.me.nickname }}</span>
-          <span class="me__id tm-num">ID {{ session.me.id }}</span>
-        </template>
-        <van-loading v-else size="20" />
-      </section>
+      <div v-if="state === 'loading'" class="status" role="status">
+        <van-loading size="20" />
+        <span>正在加载行程…</span>
+      </div>
 
-      <p class="empty">行程列表马上就做。</p>
+      <div v-else-if="state === 'error'" class="status status--error" role="alert">
+        <p class="status__text">{{ errorMessage }}</p>
+        <van-button size="small" plain type="primary" @click="load">重试</van-button>
+      </div>
+
+      <p v-else-if="isEmpty" class="empty">还没有行程。</p>
+
+      <ul v-else class="trips">
+        <li v-for="trip in trips" :key="trip.id">
+          <article class="trip">
+            <h2 class="trip__name">{{ trip.name }}</h2>
+            <p v-if="trip.description" class="trip__description">{{ trip.description }}</p>
+            <p class="trip__dates tm-num">{{ formatDateRange(trip.startDate, trip.endDate) }}</p>
+            <div class="trip__meta">
+              <CurrencyTag :code="trip.displayCurrency" />
+              <span class="trip__tz">{{ timezoneLabel(trip.timezone) }}</span>
+              <span v-if="trip.myRole === 'owner'" class="trip__role">我创建的</span>
+            </div>
+          </article>
+        </li>
+      </ul>
     </main>
   </div>
 </template>
@@ -52,42 +78,30 @@ function switchUser() {
 <style lang="less" scoped>
 @import (reference) '../styles/breakpoints.less';
 
-.switch {
-  // 深色页头上的描边按钮：白字白边，高度满足 44px 点击区
-  min-height: var(--tm-tap-min);
-  background: transparent;
-  color: #fff;
-  border-color: rgb(255 255 255 / 60%);
-}
-
-@media (min-width: @bp-desktop) {
-  .switch {
-    display: none;
-  }
-}
-
 .home {
-  display: flex;
-  flex-direction: column;
-  gap: var(--tm-space-4);
   padding-block: var(--tm-space-4);
 }
 
-.me {
+.status {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--tm-space-2);
-  min-height: 24px;
-}
-
-.me__name {
-  font-size: var(--tm-text-lg);
-  font-weight: 600;
-}
-
-.me__id {
+  padding: var(--tm-space-4);
   color: var(--tm-muted);
-  font-size: var(--tm-text-xs);
+  font-size: var(--tm-text-sm);
+}
+
+.status--error {
+  flex-direction: column;
+  align-items: flex-start;
+  border: 1px solid var(--tm-line);
+  border-radius: var(--tm-radius-card);
+  background: var(--tm-surface);
+  color: var(--tm-navy);
+}
+
+.status__text {
+  margin: 0;
 }
 
 .empty {
@@ -97,5 +111,78 @@ function switchUser() {
   border-radius: var(--tm-radius-card);
   color: var(--tm-muted);
   font-size: var(--tm-text-sm);
+}
+
+.trips {
+  display: grid;
+  gap: var(--tm-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: @bp-desktop) {
+  .trips {
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: var(--tm-space-4);
+  }
+}
+
+.trip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tm-space-1);
+  height: 100%;
+  padding: var(--tm-space-4);
+  border: 1px solid var(--tm-line);
+  border-radius: var(--tm-radius-card);
+  background: var(--tm-surface);
+}
+
+.trip__name {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--tm-text-lg);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.trip__description {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--tm-muted);
+  font-size: var(--tm-text-sm);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.trip__dates {
+  margin: 0;
+  font-size: var(--tm-text-sm);
+}
+
+.trip__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tm-space-2) var(--tm-space-3);
+  margin-top: var(--tm-space-2);
+}
+
+.trip__tz {
+  color: var(--tm-muted);
+  font-size: var(--tm-text-xs);
+}
+
+.trip__role {
+  margin-left: auto;
+  padding: 0 var(--tm-space-2);
+  border: 1px solid var(--tm-navy);
+  border-radius: var(--tm-radius-tag);
+  font-size: var(--tm-text-xs);
+  font-weight: 600;
+  line-height: 20px;
 }
 </style>
