@@ -3,7 +3,9 @@ package com.cshlands.api.member;
 import com.cshlands.api.common.ApiException;
 import com.cshlands.api.user.UserMapper;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -110,6 +112,40 @@ public class MemberService {
             throw ApiException.conflict("CANNOT_REMOVE_OWNER", "Owner cannot be removed, please transfer ownership first");
         }
         return new MemberChangeResult(after, List.of());
+    }
+
+    /**
+     * 仅当前 Owner。先把旧 Owner 降为 member，再升新 Owner，两步在同一个事务里：
+     * 第二步失败时第一步回滚，否则这个 Trip 会没有 Owner。
+     * 并发的第二次转让会在降级这一步影响 0 行（他已经不是 Owner 了），返回 403。
+     */
+    @Transactional
+    TransferOwnerResult transferOwner(long userId, long tripId, long memberId) {
+        ActiveMember me = requireOwner(userId, tripId);
+        if (me.memberId() == memberId) {
+            throw ApiException.validationFailed("memberId", "cannot transfer ownership to yourself");
+        }
+        MemberView target = memberMapper.findById(memberId, tripId);
+        if (target == null) {
+            throw ApiException.notFound();
+        }
+        if (target.status() != MemberStatus.ACTIVE) {
+            throw memberLeft();
+        }
+
+        if (memberMapper.demoteToMember(me.memberId(), tripId) == 0) {
+            throw ApiException.forbidden("Only the owner can do this");
+        }
+        if (memberMapper.promoteToOwner(memberId, tripId) == 0) {
+            throw memberLeft();
+        }
+        return new TransferOwnerResult(
+                memberMapper.findById(me.memberId(), tripId),
+                memberMapper.findById(memberId, tripId));
+    }
+
+    private static ApiException memberLeft() {
+        return new ApiException(HttpStatus.BAD_REQUEST, "MEMBER_LEFT", "The target member has left the trip");
     }
 
 }

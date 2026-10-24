@@ -40,4 +40,9 @@ class MemberController {
         return memberService.remove(CurrentUser.id(), tripId, memberId);
     }
 
+    @PostMapping("/owner/transfer/{memberId}")
+    TransferOwnerResult transferOwner(@PathVariable long tripId, @PathVariable long memberId) {
+        return memberService.transferOwner(CurrentUser.id(), tripId, memberId);
+    }
+
 }

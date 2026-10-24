@@ -48,4 +48,17 @@ interface MemberMapper {
     @Update("UPDATE trip_member SET status = 'left' " +
             "WHERE trip_id = #{tripId} AND id = #{memberId} AND status = 'active' AND role <> 'owner'")
     int markLeftById(@Param("memberId") long memberId, @Param("tripId") long tripId);
+
+    /** 把在籍的 Owner 降为普通成员；影响 0 行说明他已经不是 Owner（比如并发的另一次转让先完成了） */
+    @Update("UPDATE trip_member SET role = 'member' " +
+            "WHERE trip_id = #{tripId} AND id = #{memberId} AND status = 'active' AND role = 'owner'")
+    int demoteToMember(@Param("memberId") long memberId, @Param("tripId") long tripId);
+
+    /**
+     * 把在籍的非 Owner 升为 Owner；影响 0 行说明他不在籍。
+     * 必须在旧 Owner 降级之后执行：uk_member_one_owner 保证每个 Trip 只有一个 Owner。
+     */
+    @Update("UPDATE trip_member SET role = 'owner' " +
+            "WHERE trip_id = #{tripId} AND id = #{memberId} AND status = 'active' AND role <> 'owner'")
+    int promoteToOwner(@Param("memberId") long memberId, @Param("tripId") long tripId);
 }
