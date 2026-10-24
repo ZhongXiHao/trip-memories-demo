@@ -28,6 +28,13 @@ const router = createRouter({
       name: 'trip-new',
       component: () => import('@/views/TripCreateView.vue'),
     },
+    {
+      // 只接受数字 id；/trips/new 这类固定路径不会被它吃掉
+      path: '/trips/:tripId(\\d+)',
+      name: 'trip',
+      component: () => import('@/views/TripDetailView.vue'),
+      props: (route) => ({ tripId: Number(route.params.tripId) }),
+    },
     { path: '/:pathMatch(.*)*', redirect: { name: 'home' } },
   ],
 })

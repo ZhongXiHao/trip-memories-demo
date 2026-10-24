@@ -28,6 +28,12 @@ export interface TripRequest {
   endDate?: string | null
 }
 
+/** GET /trips/{tripId}：仅在籍成员；不是成员、已退出或行程已删除都是 404（不泄露行程是否存在） */
+export async function getTrip(tripId: number): Promise<TripView> {
+  const { data } = await http.get<TripView>(`/trips/${tripId}`)
+  return data
+}
+
 /** GET /trips：我在籍的、未删除的行程，后端已按创建时间倒序 */
 export async function listTrips(): Promise<TripView[]> {
   const { data } = await http.get<{ items: TripView[] }>('/trips')

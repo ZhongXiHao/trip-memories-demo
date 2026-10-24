@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 
 import { toApiError, describeError } from '@/api/errors'
 import { listTrips, type TripView } from '@/api/trips'
@@ -8,6 +8,7 @@ import BoardHeader from '@/components/BoardHeader.vue'
 import CurrencyTag from '@/components/CurrencyTag.vue'
 import { useSessionStore } from '@/stores/session'
 import { formatDateRange } from '@/utils/date'
+import { roleLabel } from '@/utils/members'
 import { timezoneLabel } from '@/utils/timezones'
 
 // 我的行程：当前用户在籍的行程，后端已按创建时间倒序。
@@ -69,16 +70,16 @@ function newTrip() {
 
       <ul v-else class="trips">
         <li v-for="trip in trips" :key="trip.id">
-          <article class="trip">
+          <RouterLink :to="{ name: 'trip', params: { tripId: trip.id } }" class="trip">
             <h2 class="trip__name">{{ trip.name }}</h2>
             <p v-if="trip.description" class="trip__description">{{ trip.description }}</p>
             <p class="trip__dates tm-num">{{ formatDateRange(trip.startDate, trip.endDate) }}</p>
             <div class="trip__meta">
               <CurrencyTag :code="trip.displayCurrency" />
               <span class="trip__tz">{{ timezoneLabel(trip.timezone) }}</span>
-              <span v-if="trip.myRole === 'owner'" class="trip__role">我创建的</span>
+              <span v-if="trip.myRole === 'owner'" class="trip__role">{{ roleLabel(trip.myRole) }}</span>
             </div>
-          </article>
+          </RouterLink>
         </li>
       </ul>
     </main>
@@ -166,6 +167,16 @@ function newTrip() {
   border: 1px solid var(--tm-line);
   border-radius: var(--tm-radius-card);
   background: var(--tm-surface);
+  color: inherit;
+  text-decoration: none;
+
+  &:hover {
+    border-color: var(--tm-navy);
+  }
+
+  &:active {
+    background: var(--tm-board);
+  }
 }
 
 .trip__name {
