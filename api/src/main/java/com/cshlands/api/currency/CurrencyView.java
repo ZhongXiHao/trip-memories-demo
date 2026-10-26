@@ -1,6 +1,6 @@
 package com.cshlands.api.currency;
 
 
-record CurrencyView(String code, String name, int roundingUnit) {
+public record CurrencyView(String code, String name, int roundingUnit) {
 
 }
