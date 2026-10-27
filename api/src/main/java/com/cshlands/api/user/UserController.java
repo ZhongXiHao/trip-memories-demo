@@ -2,7 +2,7 @@ package com.cshlands.api.user;
 
 import com.cshlands.api.auth.CurrentUser;
 import com.cshlands.api.common.ApiException;
-import org.springframework.http.HttpStatus;
+import com.cshlands.api.common.ErrorCode;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,7 +21,7 @@ class UserController {
     UserView me() {
         UserView user = userMapper.findById(CurrentUser.id());
         if (user == null) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "User not found");
+            throw ApiException.of(ErrorCode.NOT_FOUND, "User not found");
         }
         return user;
     }

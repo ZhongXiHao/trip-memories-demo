@@ -13,8 +13,4 @@ public record ErrorResponse(String code, String message, List<Field> fields) {
     public record Field(String field, String message) {
     }
 
-    public static ErrorResponse of(String code, String message) {
-        return new ErrorResponse(code, message, null);
-    }
-
 }

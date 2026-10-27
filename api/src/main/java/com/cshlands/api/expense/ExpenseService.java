@@ -1,11 +1,11 @@
 package com.cshlands.api.expense;
 
 import com.cshlands.api.common.ApiException;
+import com.cshlands.api.common.ErrorCode;
 import com.cshlands.api.currency.CurrencyMapper;
 import com.cshlands.api.currency.CurrencyView;
 import com.cshlands.api.member.ActiveMember;
 import com.cshlands.api.member.MemberService;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -124,7 +124,7 @@ class ExpenseService {
         if (amountMinor % roundingUnit != 0) {
             // 当单位是 1 时，只允许保留小数后两位
             String message = roundingUnit == 100 ? "Amount must be an integer" : "Amount must be 2 decimal places";
-            throw new ApiException(HttpStatus.BAD_REQUEST, "AMOUNT_NOT_ROUNDABLE", message);
+            throw ApiException.of(ErrorCode.AMOUNT_NOT_ROUNDABLE, message);
         }
     }
 
@@ -163,6 +163,6 @@ class ExpenseService {
     }
 
     private static ApiException splitSumMismatch() {
-        return new ApiException(HttpStatus.BAD_REQUEST, "SPLIT_SUM_MISMATCH", "The sum of custom splits does not equal the total amount");
+        return ApiException.of(ErrorCode.SPLIT_SUM_MISMATCH, "The sum of custom splits does not equal the total amount");
     }
 }
