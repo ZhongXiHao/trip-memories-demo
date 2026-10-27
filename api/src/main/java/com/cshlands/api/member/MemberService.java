@@ -7,7 +7,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Trip 成员的业务入口；其他包只通过它操作成员，不直接碰 Mapper。
@@ -41,6 +44,26 @@ public class MemberService {
             throw ApiException.notFound();
         }
         return member;
+    }
+
+    /**
+     * 请求里引用的 memberId（付款人、分摊者等）都必须是这个 Trip 的在籍成员。按传入顺序检查，抛出遇到的第一个问题：
+     * 不属于这个 Trip → 400 MEMBER_NOT_IN_TRIP，已退出 → 400 MEMBER_LEFT。
+     * 不检查调用者自己，那一步先过 {@link #requireActiveMember}。
+     */
+    public void requireActiveMembers(long tripId, Collection<Long> memberIds) {
+        Map<Long, MemberStatus> statusById = memberMapper.list(tripId, null).stream()
+                .collect(Collectors.toMap(MemberView::memberId, MemberView::status));
+        for (long memberId : memberIds) {
+            MemberStatus status = statusById.get(memberId);
+            if (status == null) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "MEMBER_NOT_IN_TRIP",
+                        "Member " + memberId + " is not in trip " + tripId);
+            }
+            if (status != MemberStatus.ACTIVE) {
+                throw memberLeft();
+            }
+        }
     }
 
     /**

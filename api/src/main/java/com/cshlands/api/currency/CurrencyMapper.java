@@ -13,4 +13,9 @@ public interface CurrencyMapper {
 
     @Select("SELECT COUNT(*) > 0 FROM currency WHERE code = #{code}")
     boolean exists(String code);
+
+    /** 币别不存在时返回 null */
+    @Select("SELECT code, name, rounding_unit" +
+            " FROM currency WHERE code = #{code}")
+    CurrencyView find(String code);
 }
