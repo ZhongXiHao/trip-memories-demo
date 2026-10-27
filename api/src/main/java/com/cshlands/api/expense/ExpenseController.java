@@ -13,9 +13,8 @@ class ExpenseController {
         this.expenseService = expenseService;
     }
 
-
     @PostMapping("/preview")
     ExpensePreview preview(@PathVariable long tripId, @Valid @RequestBody ExpenseRequest request) {
-        return expenseService.checkPreview(CurrentUser.id(), tripId, request);
+        return expenseService.preview(CurrentUser.id(), tripId, request);
     }
 }
