@@ -1,9 +1,9 @@
 package com.cshlands.api.member;
 
 import com.cshlands.api.common.ApiException;
+import com.cshlands.api.common.ErrorCode;
 import com.cshlands.api.user.UserMapper;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,7 +57,7 @@ public class MemberService {
         for (long memberId : memberIds) {
             MemberStatus status = statusById.get(memberId);
             if (status == null) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "MEMBER_NOT_IN_TRIP",
+                throw ApiException.of(ErrorCode.MEMBER_NOT_IN_TRIP,
                         "Member " + memberId + " is not in trip " + tripId);
             }
             if (status != MemberStatus.ACTIVE) {
@@ -72,7 +72,7 @@ public class MemberService {
     public ActiveMember requireOwner(long userId, long tripId) {
         ActiveMember member = requireActiveMember(userId, tripId);
         if (member.role() != MemberRole.OWNER) {
-            throw ApiException.forbidden("Only the owner can do this");
+            throw ownerOnly();
         }
         return member;
     }
@@ -94,7 +94,7 @@ public class MemberService {
             try {
                 memberMapper.insert(new NewMember(tripId, newUserId, MemberRole.MEMBER, MemberStatus.ACTIVE));
             } catch (DuplicateKeyException e) {
-                throw ApiException.conflict("ALREADY_MEMBER", "User is already a member of this trip");
+                throw ApiException.of(ErrorCode.ALREADY_MEMBER, "User is already a member of this trip");
             }
         }
         return new AddMemberResult(memberMapper.findByUser(newUserId, tripId), created);
@@ -108,7 +108,7 @@ public class MemberService {
             }
             ActiveMember member = requireActiveMember(userId, tripId);   // 不在籍 → 404
             if (member.role() == MemberRole.OWNER) {
-                throw ApiException.conflict("OWNER_MUST_TRANSFER_FIRST", "Owner cannot quit the trip, please transfer ownership first");
+                throw ApiException.of(ErrorCode.OWNER_MUST_TRANSFER_FIRST, "Owner cannot quit the trip, please transfer ownership first");
             }
             // 走到这里：UPDATE 时他还是 Owner，之后刚好被转让、已降为普通成员。再退一次必然成功。
         }
@@ -122,7 +122,7 @@ public class MemberService {
     MemberChangeResult remove(long userId, long tripId, long memberId) {
         ActiveMember me = requireOwner(userId, tripId); // 检查自己是 Owner，否则 403；不在籍 → 404
         if (me.memberId() == memberId) {
-            throw ApiException.conflict("CANNOT_REMOVE_OWNER", "Owner cannot be removed, please transfer ownership first");
+            throw cannotRemoveOwner();
         }
         if (memberMapper.findById(memberId, tripId) == null) { // memberId 不属于这个 Trip → 404
             throw ApiException.notFound();
@@ -132,7 +132,7 @@ public class MemberService {
         MemberView after = memberMapper.findById(memberId, tripId);
         if (after.status() == MemberStatus.ACTIVE) {
             // 仍在籍：他在上面两步之间刚好被转让成了 Owner，UPDATE 因此没有生效
-            throw ApiException.conflict("CANNOT_REMOVE_OWNER", "Owner cannot be removed, please transfer ownership first");
+            throw cannotRemoveOwner();
         }
         return new MemberChangeResult(after, List.of());
     }
@@ -157,7 +157,7 @@ public class MemberService {
         }
 
         if (memberMapper.demoteToMember(me.memberId(), tripId) == 0) {
-            throw ApiException.forbidden("Only the owner can do this");
+            throw ownerOnly();
         }
         if (memberMapper.promoteToOwner(memberId, tripId) == 0) {
             throw memberLeft();
@@ -189,7 +189,15 @@ public class MemberService {
     }
 
     private static ApiException memberLeft() {
-        return new ApiException(HttpStatus.BAD_REQUEST, "MEMBER_LEFT", "The target member has left the trip");
+        return ApiException.of(ErrorCode.MEMBER_LEFT, "The target member has left the trip");
+    }
+
+    private static ApiException cannotRemoveOwner() {
+        return ApiException.of(ErrorCode.CANNOT_REMOVE_OWNER, "Owner cannot be removed, please transfer ownership first");
+    }
+
+    private static ApiException ownerOnly() {
+        return ApiException.forbidden("Only the owner can do this");
     }
 
 }

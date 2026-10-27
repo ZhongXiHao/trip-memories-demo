@@ -1,6 +1,5 @@
 package com.cshlands.api.common;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -24,23 +23,26 @@ public class GlobalExceptionHandler {
         List<ErrorResponse.Field> fields = e.getBindingResult().getFieldErrors().stream()
                 .map(error -> new ErrorResponse.Field(error.getField(), error.getDefaultMessage()))
                 .toList();
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponse("VALIDATION_FAILED", "Request validation failed", fields));
+        return validationFailed("Request validation failed", fields);
     }
 
     /** 请求体缺失或不是合法 JSON、字段类型对不上 */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     ResponseEntity<ErrorResponse> handleUnreadableBody(HttpMessageNotReadableException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of("VALIDATION_FAILED", "Request body is missing or malformed"));
+        return validationFailed("Request body is missing or malformed", null);
     }
 
     /** 路径或查询参数类型不对，比如 /trips/abc */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponse("VALIDATION_FAILED", "Request validation failed",
-                        List.of(new ErrorResponse.Field(e.getName(), "invalid value"))));
+        return validationFailed("Request validation failed",
+                List.of(new ErrorResponse.Field(e.getName(), "invalid value")));
+    }
+
+    /** 框架层发现的请求问题，统一成 VALIDATION_FAILED；fields 为 null 时响应里不出现这个字段 */
+    private static ResponseEntity<ErrorResponse> validationFailed(String message, List<ErrorResponse.Field> fields) {
+        ErrorCode code = ErrorCode.VALIDATION_FAILED;
+        return ResponseEntity.status(code.status()).body(new ErrorResponse(code.code(), message, fields));
     }
 
 }
