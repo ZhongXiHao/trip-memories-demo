@@ -13,7 +13,7 @@ record ExpenseRequest(
         @NotNull @Positive Long amountMinor,
         @NotBlank String currency,
         @NotNull Long paidByMemberId,
-        SplitMode splitMode,
+        @NotNull SplitMode splitMode,
         List<SplitRequest> splits,
         String occurredAt,
         String occurredTz,
