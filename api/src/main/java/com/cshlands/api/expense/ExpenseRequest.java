@@ -9,7 +9,7 @@ import java.util.List;
 
 record ExpenseRequest(
         String clientUuid,
-        @NotNull @Size(max = 128, message = "Title must be at most 128 characters long") String title,
+        @NotBlank @Size(max = 128, message = "Title must be at most 128 characters long") String title,
         @NotNull @Positive Long amountMinor,
         @NotBlank String currency,
         @NotNull Long paidByMemberId,
