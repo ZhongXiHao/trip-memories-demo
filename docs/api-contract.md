@@ -167,16 +167,17 @@ Trip 对象：
   "amountMinor": 100000,
   "currency": "JPY",
   "splits": [
-    {"memberId": 3, "amountMinor": 33400},
+    {"memberId": 3, "amountMinor": 33400, "remainderMinor": 100},
     {"memberId": 5, "amountMinor": 33300},
     {"memberId": 7, "amountMinor": 33300}
   ],
-  "remainder": {"amountMinor": 100, "memberId": 3},
   "warnings": []
 }
 ```
 
 余数规则（规格 4.6.4）：先给付款人；付款人不在分摊名单里则给名单第一位。上例是 1000 円分 3 人，每人 333 円，余 1 円给付款人（成员 3）。
+
+`remainderMinor` 只出现在拿到余数的那一项上，并且已经包含在该项的 `amountMinor` 里（上例成员 3 是 333 円 + 1 円 = 334 円），所以 `splits` 各项金额之和始终等于 `amountMinor`。没有余数（整除，或 `custom`、`none`）时，所有项都不带这个字段。
 
 ### 2. 创建支出
 
