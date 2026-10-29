@@ -20,6 +20,11 @@ class ExpenseController {
         return expenseService.preview(CurrentUser.id(), tripId, request);
     }
 
+    @GetMapping("/{expenseId}")
+    ExpenseView get(@PathVariable long tripId, @PathVariable long expenseId) {
+        return expenseService.get(CurrentUser.id(), tripId, expenseId);
+    }
+
     /**
      * 首次创建 201；同一个 clientUuid 内容一致的重放 200，返回已有记录
      */

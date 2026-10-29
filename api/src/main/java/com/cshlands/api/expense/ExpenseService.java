@@ -91,6 +91,18 @@ class ExpenseService {
     }
 
     /**
+     * 支出详情。看不见的（不存在、已删除、别的行程的、别人的个人支出）都是 404，不泄露它存在过。
+     */
+    ExpenseView get(long userId, long tripId, long expenseId) {
+        ActiveMember me = memberService.requireActiveMember(userId, tripId);
+        ExpenseRow row = expenseMapper.findVisible(tripId, expenseId, me.memberId());
+        if (row == null) {
+            throw ApiException.notFound();
+        }
+        return toView(row, tripService.getTripClock(userId, tripId));
+    }
+
+    /**
      * 用库里实际生效的值（含默认值）拼出支出对象：分摊从库里取，dayIndex 按这笔自己的时区算
      */
     private ExpenseView toView(ExpenseRow row, TripClock tripClock) {

@@ -24,6 +24,14 @@ interface ExpenseMapper {
     @Select(ROW_SELECT + " WHERE trip_id = #{tripId} AND client_uuid = #{clientUuid}")
     ExpenseRow findByClientUuid(@Param("tripId") long tripId, @Param("clientUuid") String clientUuid);
 
+    /**
+     * 这个成员看得见的、没删除的一笔：共同支出，或者自己记的个人支出。
+     * 不存在、已删除、别的行程的、别人的个人支出，一律是 null，调用方都当 404，不泄露它存在过。
+     */
+    @Select(ROW_SELECT + " WHERE id = #{expenseId} AND trip_id = #{tripId} AND deleted_at IS NULL " +
+            "AND (visibility = 'trip' OR created_by_member_id = #{memberId})")
+    ExpenseRow findVisible(@Param("tripId") long tripId, @Param("expenseId") long expenseId, @Param("memberId") long memberId);
+
     @Select("SELECT member_id, amount_minor FROM expense_split " +
             "WHERE expense_id = #{expenseId} ORDER BY member_id")
     List<SplitRow> findSplits(@Param("expenseId") long expenseId);
