@@ -35,7 +35,6 @@ class NewExpense {
         this.paidByMemberId = request.paidByMemberId();
         this.createdByMemberId = createdByMemberId;
         this.splitMode = request.splitMode();
-        // TODO: 需要在 Service 解析 request 的 occurredAt 是否为真实带时区：Z 或 +09:00
         this.occurredAt = request.occurredAt() == null ? Instant.now().truncatedTo(ChronoUnit.MILLIS) : Instant.parse(request.occurredAt()).truncatedTo(ChronoUnit.MILLIS);
         this.occurredTz = request.occurredTz() == null ? tripClock.timezone() : request.occurredTz();
         this.category = request.category() == null ? ExpenseCategory.OTHER : request.category();
