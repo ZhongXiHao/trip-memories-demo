@@ -10,7 +10,7 @@ import java.time.ZoneId;
 import java.util.List;
 
 @Service
-class TripService {
+public class TripService {
 
     private final TripMapper tripMapper;
     private final MemberService memberService;
@@ -23,7 +23,7 @@ class TripService {
     }
 
     @Transactional
-    public TripView create(long userId, TripRequest request) {
+    TripView create(long userId, TripRequest request) {
         validate(request);
 
         NewTrip trip = new NewTrip(request, userId);
@@ -33,16 +33,16 @@ class TripService {
         return tripMapper.findView(trip.getId(), userId);
     }
 
-    public TripView get(long userId, long tripId) {
+    TripView get(long userId, long tripId) {
         memberService.requireActiveMember(userId, tripId);
         return tripMapper.findView(tripId, userId);
     }
 
-    public List<TripView> list(long userId) {
+    List<TripView> list(long userId) {
         return tripMapper.listViews(userId);
     }
 
-    public TripView update(long userId, long tripId, TripRequest request) {
+    TripView update(long userId, long tripId, TripRequest request) {
         memberService.requireOwner(userId, tripId);
         validate(request);
 
@@ -68,4 +68,9 @@ class TripService {
         }
     }
 
+    public TripClock getTripClock(long userId, long tripId) {
+        memberService.requireActiveMember(userId, tripId);
+        TripView view = tripMapper.findView(tripId, userId);
+        return new TripClock(view.timezone(), view.startDate());
+    }
 }

@@ -10,7 +10,10 @@
 * **非成员访问**：不是该 Trip 的在籍成员，访问 Trip 下的任何接口都返回 404 `NOT_FOUND`（不泄露这个 Trip 是否存在）；是成员但没有权限返回 403 `FORBIDDEN`。
 * **列表**：返回 `{"items": [...]}`。v1 不分页，外面包一层是为了以后加分页不用改结构。
 * **修改**：`PUT` 是整体替换。带 `version` 的资源做乐观锁，对不上返回 409 `VERSION_CONFLICT`。
-* **幂等**：创建支出、创建还款必须带 `clientUuid`（调用方生成，一个「意图」生成一次）。同一个 `(tripId, clientUuid)` 再提交：内容一致返回 200 和已有记录（重复提交不是错误；首次创建是 201）；内容不一致返回 409 `IDEMPOTENCY_KEY_REUSED`。先查已有记录，再做校验。
+* **幂等**：
+  * 创建支出、创建还款必须带 `clientUuid`（调用方生成，一个「意图」生成一次）。
+  * 同一个 `(tripId, clientUuid)` 再提交：内容一致返回 200 和已有记录（重复提交不是错误；首次创建是 201）；内容不一致返回 409 `IDEMPOTENCY_KEY_REUSED`。已有记录已被删除，或是别的成员的个人支出（调用者看不到）时，同样返回 409 `IDEMPOTENCY_KEY_REUSED`。
+  * 先查已有记录，再做校验。"内容一致"的判断只比较请求里实际带了的字段；没带的可选字段不参与比较。
 * **错误结构**：
 
 ```json
@@ -134,14 +137,14 @@ Trip 对象：
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| clientUuid | string(36) | 创建必填；预览、修改不用 | 幂等键，由调用方生成 |
+| clientUuid | string(36) | 创建必填；预览、修改不用 | 幂等键，由调用方生成。是 UUID 格式。 |
 | title | string(≤128) | 是 | |
 | amountMinor | long | 是 | > 0，必须是币别 `roundingUnit` 的整数倍 |
 | currency | string(3) | 是 | |
 | paidByMemberId | long | 是 | 付款人。个人支出时必须是自己 |
 | splitMode | enum | 是 | `equal` / `custom` / `none`（个人支出） |
 | splits | array | 看 splitMode | 每项 `{memberId, amountMinor?}`，见下 |
-| occurredAt | string | 否 | 默认现在 |
+| occurredAt | string | 否 | 默认现在（ISO-8601，必须带时区：`Z` 或 `+09:00`；后端统一成 UTC 存。纯日期、`yesterday` 这类不接受，返回 400 `VALIDATION_FAILED`） |
 | occurredTz | string | 否 | IANA 时区，默认取 trip 的时区 |
 | category | enum | 否 | `flight` `lodging` `food` `transport` `shopping` `ticket` `other`，默认 `other` |
 | note | string(≤512) | 否 | |
