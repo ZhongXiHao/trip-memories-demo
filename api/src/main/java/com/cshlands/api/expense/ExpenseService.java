@@ -6,7 +6,6 @@ import com.cshlands.api.currency.CurrencyMapper;
 import com.cshlands.api.currency.CurrencyView;
 import com.cshlands.api.member.ActiveMember;
 import com.cshlands.api.member.MemberService;
-import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -28,17 +27,26 @@ class ExpenseService {
      * 只算不写。校验规则与创建相同（币别、取整单位、成员、分摊方式），返回算好的分摊。
      */
     ExpensePreview preview(long userId, long tripId, ExpenseRequest request) {
-        List<SplitView> splits = validateAndSplit(userId, tripId, request);
+        ActiveMember me = memberService.requireActiveMember(userId, tripId);
+        int roundingUnit = validate(tripId, request);
+        List<SplitView> splits = split(me, request, roundingUnit);
         return new ExpensePreview(request.amountMinor(), request.currency(), splits, List.of());
     }
 
-    private @NonNull List<SplitView> validateAndSplit(long userId, long tripId, ExpenseRequest request) {
-        ActiveMember me = memberService.requireActiveMember(userId, tripId);
-
+    /**
+     * 要查库的校验：币别、取整、成员（都在籍）。返回币别的取整单位，给 {@link #split} 用。
+     */
+    private int validate(long tripId, ExpenseRequest request) {
         int roundingUnit = requireRoundingUnit(request.currency());
         requireRoundable(request.amountMinor(), roundingUnit);
         requireValidMembers(tripId, request);
+        return roundingUnit;
+    }
 
+    /**
+     * 按分摊方式算出每个人的分摊。不查成员，只看请求本身。
+     */
+    private static List<SplitView> split(ActiveMember me, ExpenseRequest request, int roundingUnit) {
         return switch (request.splitMode()) {
             case NONE -> personalSplit(me.memberId(), request);
             case EQUAL -> equalSplits(request, roundingUnit);
