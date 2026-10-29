@@ -1,6 +1,7 @@
 package com.cshlands.api.expense;
 
 import com.cshlands.api.common.ValueEnum;
+import com.fasterxml.jackson.annotation.JsonValue;
 
 enum Visibility implements ValueEnum {
     TRIP("trip"),
@@ -13,6 +14,7 @@ enum Visibility implements ValueEnum {
     }
 
     @Override
+    @JsonValue
     public String value() {
         return value;
     }
