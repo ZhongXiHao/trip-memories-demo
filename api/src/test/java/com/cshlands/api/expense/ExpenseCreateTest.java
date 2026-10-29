@@ -15,10 +15,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
@@ -644,36 +640,6 @@ class ExpenseCreateTest extends ExpenseTestBase {
     private long splitOf(long tripId, long memberId) {
         return jdbc.queryForObject("SELECT amount_minor FROM expense_split WHERE trip_id = ? AND member_id = ?",
                 Long.class, tripId, memberId);
-    }
-
-    private static List<Integer> statuses(List<MvcResult> results) {
-        return results.stream().map(r -> r.getResponse().getStatus()).toList();
-    }
-
-    /** 让 count 个线程在同一时刻开始执行 call，返回各自的结果 */
-    private List<MvcResult> runConcurrently(int count, Callable<MvcResult> call) throws Exception {
-        ExecutorService pool = Executors.newFixedThreadPool(count);
-        try {
-            CountDownLatch ready = new CountDownLatch(count);
-            CountDownLatch go = new CountDownLatch(1);
-            List<Future<MvcResult>> futures = new ArrayList<>();
-            for (int i = 0; i < count; i++) {
-                futures.add(pool.submit(() -> {
-                    ready.countDown();
-                    go.await();
-                    return call.call();
-                }));
-            }
-            ready.await();
-            go.countDown();
-            List<MvcResult> results = new ArrayList<>();
-            for (Future<MvcResult> future : futures) {
-                results.add(future.get());
-            }
-            return results;
-        } finally {
-            pool.shutdownNow();
-        }
     }
 
 }
