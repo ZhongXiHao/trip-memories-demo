@@ -70,7 +70,7 @@ public class TripService {
 
     public TripClock getTripClock(long userId, long tripId) {
         memberService.requireActiveMember(userId, tripId);
-        TripView view = tripMapper.findView(userId, tripId);
+        TripView view = tripMapper.findView(tripId, userId);
         return new TripClock(view.timezone(), view.startDate());
     }
 }
