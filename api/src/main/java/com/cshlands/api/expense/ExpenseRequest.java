@@ -9,6 +9,7 @@ import java.util.List;
 
 record ExpenseRequest(
         String clientUuid,
+        Long expenseId, // 仅预览用：修改某笔支出前预览时带上，创建时传了也忽略
         @NotBlank @Size(max = 128, message = "Title must be at most 128 characters long") String title,
         @NotNull @Positive Long amountMinor,
         @NotBlank String currency,

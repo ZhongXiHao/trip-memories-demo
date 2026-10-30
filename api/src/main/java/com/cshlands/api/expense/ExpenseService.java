@@ -43,7 +43,7 @@ class ExpenseService {
      */
     ExpensePreview preview(long userId, long tripId, ExpenseRequest request) {
         ActiveMember me = memberService.requireActiveMember(userId, tripId);
-        int roundingUnit = validate(tripId, request);
+        int roundingUnit = validate(tripId, request, membersAlreadyIn(me, tripId, request.expenseId()));
         List<SplitView> splits = split(me, request, roundingUnit);
         return new ExpensePreview(request.amountMinor(), request.currency(), splits, List.of());
     }
@@ -258,10 +258,35 @@ class ExpenseService {
      * 重放已有支出时不调它：成员可能后来退出了，那不该让重放失败。
      */
     private int validate(long tripId, ExpenseRequest request) {
+        return validate(tripId, request, Set.of());
+    }
+
+    /**
+     * existingMemberIds：修改某笔支出时，这笔里原本就有的人，即使已退出也放行；新加入的仍必须在籍。创建传空集合。
+     */
+    private int validate(long tripId, ExpenseRequest request, Set<Long> existingMemberIds) {
         int roundingUnit = requireRoundingUnit(request.currency());
         requireRoundable(request.amountMinor(), roundingUnit);
-        requireValidMembers(tripId, request);
+        requireValidMembers(tripId, request, existingMemberIds);
         return roundingUnit;
+    }
+
+    /**
+     * 这笔支出里原本就有的人：原来的付款人加上原来的分摊者。没有 expenseId 时是空集合。
+     * 看不见的支出（不存在、已删除、别的行程的、别人的个人支出）→ 404，和详情一样不泄露它存在过。
+     */
+    private Set<Long> membersAlreadyIn(ActiveMember me, long tripId, Long expenseId) {
+        if (expenseId == null) {
+            return Set.of();
+        }
+        ExpenseRow row = expenseMapper.findVisible(tripId, expenseId, me.memberId());
+        if (row == null) {
+            throw ApiException.notFound();
+        }
+        Set<Long> memberIds = new HashSet<>();
+        memberIds.add(row.paidByMemberId());
+        expenseMapper.findSplits(row.id()).forEach(split -> memberIds.add(split.memberId()));
+        return memberIds;
     }
 
     /**
@@ -373,9 +398,10 @@ class ExpenseService {
     }
 
     /**
-     * 付款人和所有分摊成员：名单里不能有重复，且都必须是这个行程的在籍成员
+     * 付款人和所有分摊成员：名单里不能有重复，且都必须是这个行程的在籍成员。
+     * existingMemberIds 里的人（这笔支出原本就有的）不查：他们一定是这个行程的成员，已退出也放行。
      */
-    private void requireValidMembers(long tripId, ExpenseRequest request) {
+    private void requireValidMembers(long tripId, ExpenseRequest request, Set<Long> existingMemberIds) {
         List<SplitRequest> splits = request.splits() == null ? List.of() : request.splits();
         requireNoDuplicateMembers(splits);
 
@@ -383,6 +409,7 @@ class ExpenseService {
         List<Long> memberIds = new ArrayList<>();
         memberIds.add(request.paidByMemberId());
         splits.forEach(split -> memberIds.add(split.memberId()));
+        memberIds.removeIf(existingMemberIds::contains);
         memberService.requireActiveMembers(tripId, memberIds);
     }
 
