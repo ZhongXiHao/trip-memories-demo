@@ -1,6 +1,7 @@
 package com.cshlands.api.expense;
 
 import com.cshlands.api.auth.CurrentUser;
+import com.cshlands.api.common.PageResult;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +26,9 @@ class ExpenseController {
         return expenseService.get(CurrentUser.id(), tripId, expenseId);
     }
 
-    /** 软删除用 POST，见契约 */
+    /**
+     * 软删除用 POST，见契约
+     */
     @PostMapping("/{expenseId}/delete")
     ResponseEntity<Void> delete(@PathVariable long tripId, @PathVariable long expenseId) {
         expenseService.delete(CurrentUser.id(), tripId, expenseId);
@@ -40,5 +43,16 @@ class ExpenseController {
         ExpenseResult result = expenseService.create(CurrentUser.id(), tripId, request);
         HttpStatus status = result.created() ? HttpStatus.CREATED : HttpStatus.OK;
         return ResponseEntity.status(status).body(result.expenseView());
+    }
+
+    @GetMapping
+    PageResult<ExpenseView> list(
+            @PathVariable long tripId,
+            @RequestParam(required = false) String  date,
+            @RequestParam(name = "memberId", required = false) Long queryMemberId,
+            @RequestParam(required = false) String currency,
+            @RequestParam(required = false) ExpenseCategory category
+    ) {
+        return expenseService.list(CurrentUser.id(), tripId, date, queryMemberId, currency, category);
     }
 }

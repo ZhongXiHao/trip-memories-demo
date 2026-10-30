@@ -2,6 +2,7 @@ package com.cshlands.api.expense;
 
 import com.cshlands.api.common.ApiException;
 import com.cshlands.api.common.ErrorCode;
+import com.cshlands.api.common.PageResult;
 import com.cshlands.api.common.RegexUtils;
 import com.cshlands.api.currency.CurrencyMapper;
 import com.cshlands.api.currency.CurrencyView;
@@ -119,6 +120,52 @@ class ExpenseService {
             throw ApiException.forbidden("Only the payer or the creator can delete this expense");
         }
         throw ApiException.notFound();
+    }
+
+    PageResult<ExpenseView> list(long userId, long tripId, String date, Long queryMemberId, String currency, ExpenseCategory category) {
+        ActiveMember me = memberService.requireActiveMember(userId, tripId);
+        LocalDate day = parseDate(date);
+        Instant occurredFrom = date == null ? null : day.atStartOfDay(ZoneId.of("UTC")).minusHours(14).toInstant();
+        Instant occurredTo = date == null ? null : day.plusDays(1).atStartOfDay(ZoneId.of("UTC")).plusHours(14).toInstant();
+        ExpenseQuery expenseQuery = new ExpenseQuery(tripId, me.memberId(), queryMemberId, currency, category, occurredFrom, occurredTo);
+
+        // occurredFrom、occurredTo 只是粗筛的 UTC 范围，是闭区间，精确的"当地日期"由 Service 里按 occurredTz 判断
+        List<ExpenseRow> expenses = expenseMapper.list(expenseQuery).stream().filter(expense -> {
+            if (date == null) {
+                return true;
+            }
+            LocalDate occurredDate = expense.occurredAt().atZone(ZoneId.of(expense.occurredTz())).toLocalDate();
+            return occurredDate.equals(day);
+        }).toList();
+        if (expenses.isEmpty()) {
+            return new PageResult<>(List.of());
+        }
+        // 获取所有分摊
+        List<ExpenseSplitRow> splits = expenseMapper.findSplitsByMultipleExpenseIds(expenses.stream().map(ExpenseRow::id).collect(Collectors.toList()));
+        // 转换为 Map<expenseId, List<ExpenseSplitRow>>
+        Map<Long, List<ExpenseSplitRow>> collect = splits.stream().collect(Collectors.groupingBy(ExpenseSplitRow::expenseId, Collectors.toList()));
+        // 获取行程开始日期
+        LocalDate startDate = tripService.getTripClock(userId, tripId).startDate();
+        // 转换为 ExpenseView
+        List<ExpenseView> expenseViews = expenses.stream().map(expense -> {
+            List<SplitRow> splitRows = collect.getOrDefault(expense.id(), List.of()).stream().map(split -> new SplitRow(split.memberId(), split.amountMinor())).toList();
+            Long dayIndex = calculateDayIndex(expense.occurredAt(), ZoneId.of(expense.occurredTz()), startDate);
+            return ExpenseView.of(expense, splitRows, dayIndex);
+        }).toList();
+
+        return new PageResult<>(expenseViews);
+    }
+
+    private static LocalDate parseDate(String date) {
+        if (date == null) {
+            return null;
+        }
+        // 日期必须是 yyyy-MM-dd
+        try {
+            return LocalDate.parse(date);
+        } catch (DateTimeParseException e) {
+            throw validationFailed("date", "must be a valid date in the format yyyy-MM-dd");
+        }
     }
 
     /**

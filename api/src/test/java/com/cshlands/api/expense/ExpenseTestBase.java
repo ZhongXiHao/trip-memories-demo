@@ -24,6 +24,7 @@ import java.util.stream.LongStream;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 /**
  * 支出创建相关测试的公共工具：用 JDBC 造数据、构造请求体、调用接口、清理。
@@ -234,6 +235,28 @@ abstract class ExpenseTestBase {
                 .content(body.json()));
     }
 
+    /** 修改一笔支出（整体替换） */
+    protected ResultActions update(long actingUserId, long tripId, long expenseId, Body body) throws Exception {
+        return mockMvc.perform(put("/trips/" + tripId + "/expenses/" + expenseId)
+                .header("X-User-Id", actingUserId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body.json()));
+    }
+
+    /** 支出列表。query 是不带问号的查询串，比如 "date=2026-10-03&memberId=3"，没有就传空串 */
+    protected ResultActions list(long actingUserId, long tripId, String query) throws Exception {
+        String url = "/trips/" + tripId + "/expenses" + (query.isEmpty() ? "" : "?" + query);
+        return mockMvc.perform(get(url).header("X-User-Id", actingUserId));
+    }
+
+    /** 记账预览 */
+    protected ResultActions preview(long actingUserId, long tripId, Body body) throws Exception {
+        return mockMvc.perform(post("/trips/" + tripId + "/expenses/preview")
+                .header("X-User-Id", actingUserId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body.json()));
+    }
+
     /** 软删除一笔支出（契约里用 POST） */
     protected ResultActions deleteExpense(long actingUserId, long tripId, long expenseId) throws Exception {
         return mockMvc.perform(post("/trips/" + tripId + "/expenses/" + expenseId + "/delete")
@@ -291,6 +314,24 @@ abstract class ExpenseTestBase {
 
     protected int splitRows(long tripId) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM expense_split WHERE trip_id = ?", Integer.class, tripId);
+    }
+
+    /** 这笔支出在库里的分摊：memberId → 金额 */
+    protected Map<Long, Long> splitsOf(long expenseId) {
+        Map<Long, Long> splits = new LinkedHashMap<>();
+        jdbc.query("SELECT member_id, amount_minor FROM expense_split WHERE expense_id = ? ORDER BY member_id",
+                rs -> {
+                    splits.put(rs.getLong("member_id"), rs.getLong("amount_minor"));
+                }, expenseId);
+        return splits;
+    }
+
+    protected int versionOf(long expenseId) {
+        return jdbc.queryForObject("SELECT version FROM expense WHERE id = ?", Integer.class, expenseId);
+    }
+
+    protected String titleOf(long expenseId) {
+        return jdbc.queryForObject("SELECT title FROM expense WHERE id = ?", String.class, expenseId);
     }
 
 }

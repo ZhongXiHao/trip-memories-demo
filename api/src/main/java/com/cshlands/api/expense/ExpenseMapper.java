@@ -36,4 +36,8 @@ interface ExpenseMapper {
     @Select("SELECT member_id, amount_minor FROM expense_split " +
             "WHERE expense_id = #{expenseId} ORDER BY member_id")
     List<SplitRow> findSplits(@Param("expenseId") long expenseId);
+
+    List<ExpenseRow> list(ExpenseQuery query);
+
+    List<ExpenseSplitRow> findSplitsByMultipleExpenseIds(@Param("expenseIds") List<Long> expenseIds);
 }
