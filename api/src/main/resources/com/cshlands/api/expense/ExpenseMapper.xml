@@ -3,6 +3,27 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.cshlands.api.expense.ExpenseMapper">
+    <sql id="rowColumns">
+        id, trip_id, client_uuid, title, amount_minor, currency,
+    paid_by_member_id, created_by_member_id, split_mode, occurred_at, occurred_tz,
+    category, visibility, source, note, version, created_at, updated_at, deleted_at
+    </sql>
+
+
+    <select id="findByClientUuid" resultType="com.cshlands.api.expense.ExpenseRow">
+        SELECT <include refid="rowColumns"/>
+        FROM expense
+        WHERE trip_id = #{tripId} AND client_uuid = #{clientUuid}
+    </select>
+
+    <select id="findVisible" resultType="com.cshlands.api.expense.ExpenseRow">
+        SELECT
+        <include refid="rowColumns"/>
+        FROM expense
+        WHERE id = #{expenseId} AND trip_id = #{tripId} AND deleted_at IS NULL
+        AND (visibility = 'trip' OR created_by_member_id = #{memberId})
+    </select>
+
     <insert id="insertSplits">
         INSERT INTO expense_split(expense_id, trip_id, member_id, amount_minor)
         VALUES
