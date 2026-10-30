@@ -32,6 +32,15 @@ interface ExpenseMapper {
             "AND (visibility = 'trip' OR created_by_member_id = #{memberId})")
     ExpenseRow findVisible(@Param("tripId") long tripId, @Param("expenseId") long expenseId, @Param("memberId") long memberId);
 
+    /**
+     * 软删除：没删除过，且这个成员是付款人或记账人。返回影响的行数，0 行时要回头查原因（不存在、已删除，还是没权限）。
+     * 分摊行不动，算欠款读的是排除了已删除支出的视图。
+     */
+    @Update("UPDATE expense SET deleted_at = CURRENT_TIMESTAMP(3) " +
+            "WHERE id = #{expenseId} AND trip_id = #{tripId} AND deleted_at IS NULL " +
+            "AND (paid_by_member_id = #{memberId} OR created_by_member_id = #{memberId})")
+    int softDelete(@Param("tripId") long tripId, @Param("expenseId") long expenseId, @Param("memberId") long memberId);
+
     @Select("SELECT member_id, amount_minor FROM expense_split " +
             "WHERE expense_id = #{expenseId} ORDER BY member_id")
     List<SplitRow> findSplits(@Param("expenseId") long expenseId);

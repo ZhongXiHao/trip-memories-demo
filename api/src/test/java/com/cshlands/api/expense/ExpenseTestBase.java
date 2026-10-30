@@ -234,6 +234,12 @@ abstract class ExpenseTestBase {
                 .content(body.json()));
     }
 
+    /** 软删除一笔支出（契约里用 POST） */
+    protected ResultActions deleteExpense(long actingUserId, long tripId, long expenseId) throws Exception {
+        return mockMvc.perform(post("/trips/" + tripId + "/expenses/" + expenseId + "/delete")
+                .header("X-User-Id", actingUserId));
+    }
+
     /** 取一笔支出的详情。方法名不叫 get，避免盖住静态导入的 MockMvcRequestBuilders.get */
     protected ResultActions fetch(long actingUserId, long tripId, long expenseId) throws Exception {
         return mockMvc.perform(get("/trips/" + tripId + "/expenses/" + expenseId)

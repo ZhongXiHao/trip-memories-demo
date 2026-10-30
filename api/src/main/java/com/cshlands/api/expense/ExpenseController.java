@@ -25,6 +25,13 @@ class ExpenseController {
         return expenseService.get(CurrentUser.id(), tripId, expenseId);
     }
 
+    /** 软删除用 POST，见契约 */
+    @PostMapping("/{expenseId}/delete")
+    ResponseEntity<Void> delete(@PathVariable long tripId, @PathVariable long expenseId) {
+        expenseService.delete(CurrentUser.id(), tripId, expenseId);
+        return ResponseEntity.noContent().build();
+    }
+
     /**
      * 首次创建 201；同一个 clientUuid 内容一致的重放 200，返回已有记录
      */
