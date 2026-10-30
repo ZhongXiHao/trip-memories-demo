@@ -133,11 +133,12 @@ Trip 对象：
 5. 修改支出：PUT /trips/{tripId}/expenses/{expenseId}
 6. 删除支出：POST /trips/{tripId}/expenses/{expenseId}/delete
 
-### 请求体（1、2、5 共用）
+### 预览、创建的请求体（1、2）
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| clientUuid | string(36) | 创建必填；预览、修改不用 | 幂等键，由调用方生成。是 UUID 格式。 |
+| clientUuid | string(36) | 创建必填；预览不用 | 幂等键，由调用方生成。是 UUID 格式。 |
+| expenseId | long | 仅预览，可选 | 修改某笔支出前预览时带上，见「记账预览」。创建时传了也忽略 |
 | title | string(≤128) | 是 | |
 | amountMinor | long | 是 | > 0，必须是币别 `roundingUnit` 的整数倍 |
 | currency | string(3) | 是 | |
@@ -149,9 +150,28 @@ Trip 对象：
 | category | enum | 否 | `flight` `lodging` `food` `transport` `shopping` `ticket` `other`，默认 `other` |
 | note | string(≤512) | 否 | |
 | source | enum | 否 | `form` `command` `agent`，默认 `form` |
-| version | int | 仅修改必填 | 乐观锁，取自详情 |
 
-`splits` 随 `splitMode` 变化：
+### 修改的请求体（5）
+
+整体替换，和上面的请求体相比：不含 `clientUuid`、`source`、`expenseId`（路径里已有），多一个必填的 `version`。
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| title | string(≤128) | 是 | |
+| amountMinor | long | 是 | > 0，必须是币别 `roundingUnit` 的整数倍 |
+| currency | string(3) | 是 | |
+| paidByMemberId | long | 是 | 付款人。个人支出时必须是自己 |
+| splitMode | enum | 是 | 不能在个人支出和共同支出之间切换：`none` 只能保持 `none`，`equal` / `custom` 之间可以互换，跨类返回 400 `VALIDATION_FAILED`（`fields` 指向 `splitMode`） |
+| splits | array | 看 splitMode | 同下 |
+| occurredAt | string | 否 | **没传保持原值**。格式同创建 |
+| occurredTz | string | 否 | **没传保持原值**（不是回到行程时区）。格式同创建 |
+| category | enum | 否 | 没传回到默认 `other` |
+| note | string(≤512) | 否 | 没传变为空 |
+| version | int | 是 | 乐观锁，取自详情 |
+
+`occurredAt`、`occurredTz` 单独处理：它们没传时的默认值（现在、行程当前的时区）不是稳定的值，回到默认会让一次普通的编辑悄悄改掉这笔支出算在哪一天。其余可选字段是「整体替换」，没传就回到默认。请求体里带了 `clientUuid`、`source` 会被忽略，不报错。
+
+`splits` 随 `splitMode` 变化（预览、创建、修改都一样）：
 
 | splitMode | `splits` 怎么传 | 后端做什么 |
 |---|---|---|
@@ -159,7 +179,7 @@ Trip 对象：
 | `custom` | 成员加金额：`[{"memberId": 3, "amountMinor": 70000}, ...]` | 校验之和等于总额，否则 `SPLIT_SUM_MISMATCH` |
 | `none` | 不传或传空数组 | 自动写一条「分给付款人自己，金额 = 总额」；个人支出，可见性固定为 private，且付款人必须是自己 |
 
-不让客户端传的：`visibility`（由 `splitMode` 推出）、`createdByMemberId`（取当前用户）、`equal` 模式下的分摊金额。
+不让客户端传的：`visibility`（由 `splitMode` 推出）、`createdByMemberId`（创建时取当前用户，之后不变）、`equal` 模式下的分摊金额。
 
 ### 1. 记账预览
 
@@ -182,6 +202,8 @@ Trip 对象：
 
 `remainderMinor` 只出现在拿到余数的那一项上，并且已经包含在该项的 `amountMinor` 里（上例成员 3 是 333 円 + 1 円 = 334 円），所以 `splits` 各项金额之和始终等于 `amountMinor`。没有余数（整除，或 `custom`、`none`）时，所有项都不带这个字段。
 
+**修改某笔支出前的预览**：请求体可以带 `expenseId`。这笔支出里原本就有的付款人和分摊者，即使已退出也不报 `MEMBER_LEFT`（规则与「修改支出」一致），新加入的人仍必须在籍。`expenseId` 看不见（不存在、已删除、别的行程的、别人的个人支出）→ 404。不带 `expenseId` 时规则不变。
+
 ### 2. 创建支出
 
 先按 `(tripId, clientUuid)` 查已有记录，再校验：已有且内容一致 → 200 返回已有那一笔；已有但内容不一致 → 409 `IDEMPOTENCY_KEY_REUSED`；没有 → 校验通过后创建，201。响应体是「支出对象」。
@@ -189,7 +211,12 @@ Trip 对象：
 ### 3. 支出列表
 
 查询参数（都可选）：`date`（当地日期，如 `2026-10-03`，按每笔自己的 `occurredTz` 判断）、`memberId`（付款人或分摊者）、`currency`、`category`。
-只返回当前用户看得见的：共同支出，加上自己的个人支出。响应 `{"items": [支出对象]}`。
+只返回当前用户看得见的：共同支出，加上自己的个人支出（没删除的）。响应 `{"items": [支出对象]}`，没有时是空数组。
+
+- 排序：`occurredAt` 倒序，相同的按 `id` 倒序。
+- 几个条件同时给，取交集。筛选不会越过可见性：按别人的 `memberId` 筛，也看不到他的个人支出。
+- `date` 必须是 `yyyy-MM-dd`，否则 400 `VALIDATION_FAILED`（`fields` 指向 `date`）；`category` 不是合法值同样 400（`fields` 指向 `category`）。
+- `memberId` 可以是已退出的成员；`memberId` 不属于这个行程、`currency` 不存在，返回空列表，不报错。
 
 ### 支出对象
 
@@ -209,8 +236,13 @@ Trip 对象：
 
 ### 5. 修改支出
 
-只有付款人或记账人能改（规格 4.6.7）。请求体同上（整体替换）加 `version`；改分摊也会让 `version` 加一。响应 200，返回新的支出对象。
+只有付款人或记账人能改（规格 4.6.7），行程的 Owner 也没有特权。请求体见「修改的请求体」（整体替换，`occurredAt`、`occurredTz` 没传保持原值）。成功响应 200，返回新的支出对象；`version` 加一，改分摊、改别的字段都只加一次。记账人、来源、创建时间不变。
 修改金额时，若这笔支出已有已确认的还款关联，不会自动调整还款，差额回到欠款里。
+
+- **成员**：付款人和分摊者必须是在籍成员。例外：这笔支出里**原本就有**的人（原来的付款人、原来的分摊者），即使后来退出了，也可以原样保留；新加入的人必须在籍，否则 `MEMBER_LEFT` / `MEMBER_NOT_IN_TRIP`。
+- **其余校验**与创建相同（币别、取整、分摊方式、`occurredAt`、`occurredTz`）。失败时什么都不改。
+- **错误的先后**：看不见（不存在、已删除、别的行程的、别人的个人支出）→ 404；看得见但不是付款人或记账人 → 403 `FORBIDDEN`；请求本身有错 → 400；最后在写库时原子判断 `version`，对不上 → 409 `VERSION_CONFLICT`。两个请求拿同一个 `version` 同时改，只有一个成功。
+- 已删除的支出再修改 → 404，不是 409。
 
 ### 6. 删除支出
 
