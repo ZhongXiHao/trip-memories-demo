@@ -257,14 +257,14 @@ class ExpenseService {
      * 要查库的校验：币别、取整、成员（都在籍）。返回币别的取整单位，给 {@link #split} 用。
      * 重放已有支出时不调它：成员可能后来退出了，那不该让重放失败。
      */
-    private int validate(long tripId, ExpenseRequest request) {
+    private int validate(long tripId, SplitInput request) {
         return validate(tripId, request, Set.of());
     }
 
     /**
      * existingMemberIds：修改某笔支出时，这笔里原本就有的人，即使已退出也放行；新加入的仍必须在籍。创建传空集合。
      */
-    private int validate(long tripId, ExpenseRequest request, Set<Long> existingMemberIds) {
+    private int validate(long tripId, SplitInput request, Set<Long> existingMemberIds) {
         int roundingUnit = requireRoundingUnit(request.currency());
         requireRoundable(request.amountMinor(), roundingUnit);
         requireValidMembers(tripId, request, existingMemberIds);
@@ -292,7 +292,7 @@ class ExpenseService {
     /**
      * 按分摊方式算出每个人的分摊。不查成员，只看请求本身。
      */
-    private static List<SplitView> split(ActiveMember me, ExpenseRequest request, int roundingUnit) {
+    private static List<SplitView> split(ActiveMember me, SplitInput request, int roundingUnit) {
         return switch (request.splitMode()) {
             case NONE -> personalSplit(me.memberId(), request);
             case EQUAL -> equalSplits(request, roundingUnit);
@@ -305,7 +305,7 @@ class ExpenseService {
     /**
      * 个人支出：不带 splits，付款人必须是自己，一条分摊 = 总额
      */
-    private static List<SplitView> personalSplit(long currentMemberId, ExpenseRequest request) {
+    private static List<SplitView> personalSplit(long currentMemberId, SplitInput request) {
         if (hasSplits(request)) {
             throw validationFailed("splits", "must be null or empty when splitMode is NONE");
         }
@@ -318,7 +318,7 @@ class ExpenseService {
     /**
      * 平均分：余数一次性给 {@link #remainderHolderId} 选出的那个人，其余人拿整份
      */
-    private static List<SplitView> equalSplits(ExpenseRequest request, int roundingUnit) {
+    private static List<SplitView> equalSplits(SplitInput request, int roundingUnit) {
         List<SplitRequest> members = requireSplits(request);
         long totalMinor = request.amountMinor();
         long remainderMinor = totalMinor % ((long) roundingUnit * members.size());
@@ -346,7 +346,7 @@ class ExpenseService {
     /**
      * 自定义：先逐项校验，再校验之和等于总额，这样错误码不取决于金额的顺序
      */
-    private static List<SplitView> customSplits(ExpenseRequest request, int roundingUnit) {
+    private static List<SplitView> customSplits(SplitInput request, int roundingUnit) {
         List<SplitView> splits = new ArrayList<>();
         for (SplitRequest split : requireSplits(request)) {
             Long amountMinor = split.amountMinor();
@@ -401,7 +401,7 @@ class ExpenseService {
      * 付款人和所有分摊成员：名单里不能有重复，且都必须是这个行程的在籍成员。
      * existingMemberIds 里的人（这笔支出原本就有的）不查：他们一定是这个行程的成员，已退出也放行。
      */
-    private void requireValidMembers(long tripId, ExpenseRequest request, Set<Long> existingMemberIds) {
+    private void requireValidMembers(long tripId, SplitInput request, Set<Long> existingMemberIds) {
         List<SplitRequest> splits = request.splits() == null ? List.of() : request.splits();
         requireNoDuplicateMembers(splits);
 
@@ -425,14 +425,14 @@ class ExpenseService {
         }
     }
 
-    private static boolean hasSplits(ExpenseRequest request) {
+    private static boolean hasSplits(SplitInput request) {
         return request.splits() != null && !request.splits().isEmpty();
     }
 
     /**
      * equal 和 custom 必须带 splits
      */
-    private static List<SplitRequest> requireSplits(ExpenseRequest request) {
+    private static List<SplitRequest> requireSplits(SplitInput request) {
         if (!hasSplits(request)) {
             throw validationFailed("splits", "must not be null or empty when splitMode is " + request.splitMode());
         }

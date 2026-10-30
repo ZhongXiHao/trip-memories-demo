@@ -20,9 +20,7 @@ record ExpenseRequest(
         String occurredTz,
         ExpenseCategory category,
         @Size(max = 512, message = "Notes must be at most 512 characters long") String note,
-        Source source,
-        Integer version
-
-) {
+        Source source
+) implements SplitInput {
 
 }
