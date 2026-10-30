@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.util.ArrayList;
@@ -13,9 +14,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
@@ -88,6 +95,13 @@ abstract class ExpenseTestBase {
         return memberId(tripId, userId);
     }
 
+    /** 显式指定 memberId，用来构造"某人的 userId 恰好等于另一个人的 memberId" */
+    protected long memberWithId(long memberId, long tripId, long userId, String role, String status) {
+        jdbc.update("INSERT INTO trip_member (id, trip_id, user_id, role, status) VALUES (?, ?, ?, ?, ?)",
+                memberId, tripId, userId, role, status);
+        return memberId;
+    }
+
     protected long memberId(long tripId, long userId) {
         return jdbc.queryForObject("SELECT id FROM trip_member WHERE trip_id = ? AND user_id = ?",
                 Long.class, tripId, userId);
@@ -108,6 +122,29 @@ abstract class ExpenseTestBase {
         final long bobMember = member(tripId, bobUser, "member", "active");
         final long carolUser = user("e-carol");
         final long carolMember = member(tripId, carolUser, "member", "active");
+    }
+
+    /**
+     * 直接往库里插一笔支出，不经过创建接口。日元，2026-10-03 11:00 UTC，记录时区 Asia/Tokyo；
+     * 个人支出（none）按表的约束自动是 private。返回 id。
+     */
+    protected long insertExpense(long tripId, long paidBy, long createdBy, String splitMode, long amountMinor) {
+        return insertExpense(tripId, paidBy, createdBy, splitMode, amountMinor, "2026-10-03 11:00:00.000", "Asia/Tokyo");
+    }
+
+    protected long insertExpense(long tripId, long paidBy, long createdBy, String splitMode, long amountMinor,
+                                 String occurredAtUtc, String occurredTz) {
+        String visibility = "none".equals(splitMode) ? "private" : "trip";
+        jdbc.update("INSERT INTO expense (trip_id, client_uuid, title, amount_minor, currency, paid_by_member_id, "
+                        + "created_by_member_id, split_mode, occurred_at, occurred_tz, visibility) "
+                        + "VALUES (?, ?, '拉麵', ?, 'JPY', ?, ?, ?, ?, ?, ?)",
+                tripId, uuid(), amountMinor, paidBy, createdBy, splitMode, occurredAtUtc, occurredTz, visibility);
+        return jdbc.queryForObject("SELECT MAX(id) FROM expense WHERE trip_id = ?", Long.class, tripId);
+    }
+
+    protected void insertSplit(long tripId, long expenseId, long memberId, long amountMinor) {
+        jdbc.update("INSERT INTO expense_split (trip_id, expense_id, member_id, amount_minor) VALUES (?, ?, ?, ?)",
+                tripId, expenseId, memberId, amountMinor);
     }
 
     // ---- 请求体 ----
@@ -195,6 +232,48 @@ abstract class ExpenseTestBase {
                 .header("X-User-Id", actingUserId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body.json()));
+    }
+
+    /** 软删除一笔支出（契约里用 POST） */
+    protected ResultActions deleteExpense(long actingUserId, long tripId, long expenseId) throws Exception {
+        return mockMvc.perform(post("/trips/" + tripId + "/expenses/" + expenseId + "/delete")
+                .header("X-User-Id", actingUserId));
+    }
+
+    /** 取一笔支出的详情。方法名不叫 get，避免盖住静态导入的 MockMvcRequestBuilders.get */
+    protected ResultActions fetch(long actingUserId, long tripId, long expenseId) throws Exception {
+        return mockMvc.perform(get("/trips/" + tripId + "/expenses/" + expenseId)
+                .header("X-User-Id", actingUserId));
+    }
+
+    /** 让 count 个线程在同一时刻开始执行 call，返回各自的结果 */
+    protected List<MvcResult> runConcurrently(int count, Callable<MvcResult> call) throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(count);
+        try {
+            CountDownLatch ready = new CountDownLatch(count);
+            CountDownLatch go = new CountDownLatch(1);
+            List<Future<MvcResult>> futures = new ArrayList<>();
+            for (int i = 0; i < count; i++) {
+                futures.add(pool.submit(() -> {
+                    ready.countDown();
+                    go.await();
+                    return call.call();
+                }));
+            }
+            ready.await();
+            go.countDown();
+            List<MvcResult> results = new ArrayList<>();
+            for (Future<MvcResult> future : futures) {
+                results.add(future.get());
+            }
+            return results;
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    protected static List<Integer> statuses(List<MvcResult> results) {
+        return results.stream().map(r -> r.getResponse().getStatus()).toList();
     }
 
     protected static long idOf(String responseJson) {

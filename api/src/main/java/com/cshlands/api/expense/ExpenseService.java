@@ -91,6 +91,37 @@ class ExpenseService {
     }
 
     /**
+     * 支出详情。看不见的（不存在、已删除、别的行程的、别人的个人支出）都是 404，不泄露它存在过。
+     */
+    ExpenseView get(long userId, long tripId, long expenseId) {
+        ActiveMember me = memberService.requireActiveMember(userId, tripId);
+        ExpenseRow row = expenseMapper.findVisible(tripId, expenseId, me.memberId());
+        if (row == null) {
+            throw ApiException.notFound();
+        }
+        return toView(row, tripService.getTripClock(userId, tripId));
+    }
+
+    /**
+     * 软删除。只有付款人或记账人能删：单条带条件的 UPDATE 同时判断"没删过"和"有权限"，不先查再改，
+     * 两个请求同时删，只有一个会成功。影响 0 行再回头查原因：
+     * 看得见但没权限 → 403；其余（不存在、已删除、别的行程的、别人的个人支出）→ 404。
+     */
+    void delete(long userId, long tripId, long expenseId) {
+        ActiveMember me = memberService.requireActiveMember(userId, tripId);
+        if (expenseMapper.softDelete(tripId, expenseId, me.memberId()) == 1) {
+            return;
+        }
+
+        ExpenseRow row = expenseMapper.findVisible(tripId, expenseId, me.memberId());
+        boolean canDelete = row != null && (row.paidByMemberId() == me.memberId() || row.createdByMemberId() == me.memberId());
+        if (row != null && !canDelete) {
+            throw ApiException.forbidden("Only the payer or the creator can delete this expense");
+        }
+        throw ApiException.notFound();
+    }
+
+    /**
      * 用库里实际生效的值（含默认值）拼出支出对象：分摊从库里取，dayIndex 按这笔自己的时区算
      */
     private ExpenseView toView(ExpenseRow row, TripClock tripClock) {
