@@ -50,6 +50,12 @@ const router = createRouter({
       component: () => import('@/views/TripEditView.vue'),
       props: (route) => ({ tripId: Number(route.params.tripId) }),
     },
+    {
+      path: '/trips/:tripId(\\d+)/expenses/:expenseId(\\d+)',
+      name: 'expense',
+      component: () => import('@/views/ExpenseDetailView.vue'),
+      props: (route) => ({ tripId: Number(route.params.tripId), expenseId: Number(route.params.expenseId) }),
+    },
     { path: '/:pathMatch(.*)*', redirect: { name: 'home' } },
   ],
 })
