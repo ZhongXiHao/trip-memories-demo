@@ -240,19 +240,13 @@ async function onQuit() {
         <div ref="tabsAnchor" aria-hidden="true" />
         <van-tabs :active="activeTab" swipeable class="tabs" @update:active="setTab">
           <van-tab v-for="tab in TRIP_TABS" :key="tab.name" :name="tab.name" :title="tab.title">
-            <div class="tm-container panel">
+            <div class="tm-container panel" :class="{ 'panel--with-bar': tab.name === 'expenses' }">
               <TripExpenses
                 v-if="tab.name === 'expenses'"
                 :trip-id="tripId"
                 :members="members"
                 :display-currency="trip.displayCurrency"
-              >
-                <template #action>
-                  <van-button type="primary" size="small" icon="plus" class="add-expense" :disabled="busy" @click="goNewExpense">
-                    记一笔
-                  </van-button>
-                </template>
-              </TripExpenses>
+              />
 
               <p v-else-if="tab.name === 'debts'" class="soon">欠款和还款马上就做。</p>
 
@@ -272,6 +266,11 @@ async function onQuit() {
             </div>
           </van-tab>
         </van-tabs>
+
+        <!-- 这一屏的主按钮：固定在底部，只在支出标签显示 -->
+        <div v-if="activeTab === 'expenses'" class="action-bar">
+          <van-button type="primary" block icon="plus" :disabled="busy" @click="goNewExpense">记一笔</van-button>
+        </div>
       </template>
     </main>
 
@@ -317,10 +316,30 @@ async function onQuit() {
   }
 }
 
+// 固定在底部的"记一笔"：和手机版式的单栏一样宽（最宽 480px 居中），底部让出 iPhone 的安全区
+.action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  // 高于吸顶的标签条和日期标题，低于弹层（Vant 弹层从 2000 起）
+  z-index: 3;
+  width: 100%;
+  max-width: var(--tm-app-max-width);
+  padding: var(--tm-space-3) var(--tm-space-4) calc(var(--tm-space-3) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--tm-line);
+  background: var(--tm-surface);
+  transform: translateX(-50%);
+}
+
 .panel {
   // 至少一屏高：内容短的标签（欠款、成员）下面的空白处也能左右滑动切换
   min-height: calc(100dvh - var(--tm-tabs-h));
   padding-block: var(--tm-space-4) calc(var(--tm-space-6) + env(safe-area-inset-bottom));
+}
+
+// 支出标签：底部留出"记一笔"那一条的高度（按钮 + 上下留白 + 安全区），最后一条不会被挡住
+.panel--with-bar {
+  padding-bottom: calc(var(--tm-tap-min) + var(--tm-space-3) * 2 + env(safe-area-inset-bottom) + var(--tm-space-4));
 }
 
 .status {
@@ -394,11 +413,6 @@ async function onQuit() {
   -webkit-line-clamp: 2;
   line-clamp: 2;
   overflow-wrap: anywhere;
-}
-
-.add-expense {
-  min-height: var(--tm-tap-min);
-  padding: 0 var(--tm-space-4);
 }
 
 .soon {
