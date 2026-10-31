@@ -5,10 +5,11 @@ import { describeError, toApiError } from '@/api/errors'
 import { listExpenses, type ExpenseView } from '@/api/expenses'
 import type { MemberView } from '@/api/members'
 import CurrencyAmount from '@/components/CurrencyAmount.vue'
-import { categoryLabel, dayLabel, groupByLocalDate, memberName } from '@/utils/expenses'
+import { categoryLabel, dayLabel, groupByLocalDate, memberName, totalsByCurrency } from '@/utils/expenses'
 import { shortLocalDate, toLocalDateTime, weekdayOf } from '@/utils/zonedTime'
 
 // 行程页里的支出列表：按当地日期分组（每笔按自己的 occurredTz），后端已按时间倒序。
+// 每组的标题滚动时吸顶，右边是当天按币别分开的合计（不换算）。
 // 列表自己取数据、自己处理加载失败，不拖累页面上的其它部分。
 const props = defineProps<{
   tripId: number
@@ -21,7 +22,9 @@ const state = ref<State>('loading')
 const errorMessage = ref('')
 const expenses = ref<ExpenseView[]>([])
 
-const groups = computed(() => groupByLocalDate(expenses.value))
+const groups = computed(() =>
+  groupByLocalDate(expenses.value).map((group) => ({ ...group, totals: totalsByCurrency(group.items) })),
+)
 
 async function load() {
   state.value = 'loading'
@@ -80,7 +83,15 @@ defineExpose({ reload: load })
 
     <div v-else class="days">
       <section v-for="group in groups" :key="group.date" class="day" :aria-label="groupTitle(group.date, group.dayIndex)">
-        <h3 class="day__title">{{ groupTitle(group.date, group.dayIndex) }}</h3>
+        <div class="day__head">
+          <h3 class="day__title">{{ groupTitle(group.date, group.dayIndex) }}</h3>
+          <p class="day__totals" aria-label="当天合计">
+            <template v-for="(total, index) in group.totals" :key="total.currency">
+              <span v-if="index > 0" class="day__sep" aria-hidden="true">·</span>
+              <CurrencyAmount :amount-minor="total.amountMinor" :currency="total.currency" size="sm" />
+            </template>
+          </p>
+        </div>
         <ul class="list">
           <li v-for="expense in group.items" :key="expense.id">
             <router-link
@@ -107,6 +118,8 @@ defineExpose({ reload: load })
 </template>
 
 <style lang="less" scoped>
+@import (reference) '../styles/breakpoints.less';
+
 .head {
   display: flex;
   align-items: center;
@@ -166,11 +179,50 @@ defineExpose({ reload: load })
   gap: var(--tm-space-4);
 }
 
+// 日期标题吸顶：手机上页头会滚走，贴在视口顶部；PC 上顶部导航条是 sticky 的，贴在它下面。
+// 只在本组范围内吸住（sticky 的范围是父元素 .day），滚到下一组时被下一组的标题顶上去。
+.day__head {
+  position: sticky;
+  top: 0;
+  // 低于顶部导航条（AppTopBar 是 10），高于列表内容
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tm-space-1) var(--tm-space-3);
+  min-height: 36px;
+  margin-bottom: var(--tm-space-2);
+  padding-block: var(--tm-space-1);
+  // 和页面底色一样的实底，盖住滚到下面的行
+  background: var(--tm-board);
+}
+
+@media (min-width: @bp-desktop) {
+  .day__head {
+    top: var(--tm-topbar-h);
+  }
+}
+
 .day__title {
-  margin: 0 0 var(--tm-space-2);
+  margin: 0;
   color: var(--tm-muted);
   font-size: var(--tm-text-xs);
   font-weight: 600;
+}
+
+.day__totals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--tm-space-1) var(--tm-space-2);
+  margin: 0 0 0 auto;
+}
+
+.day__sep {
+  color: var(--tm-muted);
+  font-size: var(--tm-text-xs);
 }
 
 .list {

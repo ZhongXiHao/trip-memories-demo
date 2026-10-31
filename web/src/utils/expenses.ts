@@ -48,6 +48,23 @@ export function dayLabel(dayIndex: unknown): string | null {
   return dayIndex >= 1 ? `第 ${dayIndex} 天` : '出发前'
 }
 
+export interface CurrencyTotal {
+  currency: string
+  amountMinor: number
+}
+
+/**
+ * 按币别分开的合计，不做换算（不同币别不能直接相加）。
+ * 顺序按币别在列表里第一次出现的先后（列表是时间倒序，所以最近用过的币别在前），同一天里顺序稳定。
+ */
+export function totalsByCurrency(expenses: ExpenseView[]): CurrencyTotal[] {
+  const totals = new Map<string, number>()
+  for (const { currency, amountMinor } of expenses) {
+    totals.set(currency, (totals.get(currency) ?? 0) + amountMinor)
+  }
+  return [...totals].map(([currency, amountMinor]) => ({ currency, amountMinor }))
+}
+
 export interface ExpenseDayGroup {
   /** 当地日期 "YYYY-MM-DD"（按每笔自己的 occurredTz） */
   date: string

@@ -3,7 +3,15 @@ import { describe, expect, it } from 'vitest'
 import type { ExpenseView } from '@/api/expenses'
 import type { MemberView } from '@/api/members'
 
-import { canModifyExpense, categoryLabel, dayLabel, groupByLocalDate, isMemberLeft, memberName } from '../expenses'
+import {
+  canModifyExpense,
+  categoryLabel,
+  dayLabel,
+  groupByLocalDate,
+  isMemberLeft,
+  memberName,
+  totalsByCurrency,
+} from '../expenses'
 
 function expense(id: number, occurredAt: string, occurredTz = 'Asia/Tokyo', dayIndex: number | null = 1): ExpenseView {
   return {
@@ -96,5 +104,26 @@ describe('labels and people', () => {
   it('lets only the payer or the person who recorded it change an expense', () => {
     const e = expense(1, '2026-10-03T05:00:00Z')
     expect([3, 5, 7].map((me) => canModifyExpense(e, me))).toEqual([true, true, false])
+  })
+})
+
+describe('totalsByCurrency', () => {
+  it('adds up each currency separately, without converting, in order of first appearance', () => {
+    const list = [
+      { ...expense(4, '2026-10-03T12:00:00Z'), currency: 'KRW', amountMinor: 3000000 },
+      { ...expense(3, '2026-10-03T11:00:00Z'), currency: 'JPY', amountMinor: 120000 },
+      { ...expense(2, '2026-10-03T10:00:00Z'), currency: 'KRW', amountMinor: 2000000 },
+      { ...expense(1, '2026-10-03T09:00:00Z'), currency: 'HKD', amountMinor: 1250 },
+    ]
+
+    expect(totalsByCurrency(list)).toEqual([
+      { currency: 'KRW', amountMinor: 5000000 },
+      { currency: 'JPY', amountMinor: 120000 },
+      { currency: 'HKD', amountMinor: 1250 },
+    ])
+  })
+
+  it('is empty for no expenses', () => {
+    expect(totalsByCurrency([])).toEqual([])
   })
 })
