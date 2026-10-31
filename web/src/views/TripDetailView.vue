@@ -17,6 +17,7 @@ import { deleteTrip, getTrip, type TripView } from '@/api/trips'
 import AddMemberPopup from '@/components/AddMemberPopup.vue'
 import BoardHeader from '@/components/BoardHeader.vue'
 import CurrencyTag from '@/components/CurrencyTag.vue'
+import TripExpenses from '@/components/TripExpenses.vue'
 import TripMembers from '@/components/TripMembers.vue'
 import { formatDateRange } from '@/utils/date'
 import { confirmAction } from '@/utils/dialog'
@@ -24,7 +25,7 @@ import { roleLabel, splitMembers } from '@/utils/members'
 import { timezoneLabel } from '@/utils/timezones'
 import { showError } from '@/utils/toast'
 
-// 行程详情：行程信息 + 成员管理。支出、欠款和还款等后端接口做好后再加。
+// 行程详情：行程信息、支出列表、成员管理。欠款和还款还是占位。
 const props = defineProps<{ tripId: number }>()
 
 const router = useRouter()
@@ -70,6 +71,10 @@ watch(() => props.tripId, () => load())
 
 function goList() {
   router.push({ name: 'home' })
+}
+
+function goNewExpense() {
+  router.push({ name: 'expense-new', params: { tripId: props.tripId } })
 }
 
 function goEdit() {
@@ -224,6 +229,14 @@ async function onQuit() {
         </div>
 
         <div class="main">
+          <TripExpenses :trip-id="tripId" :members="members" :display-currency="trip.displayCurrency">
+            <template #action>
+              <van-button type="primary" size="small" icon="plus" class="add-expense" :disabled="busy" @click="goNewExpense">
+                记一笔
+              </van-button>
+            </template>
+          </TripExpenses>
+          <p class="soon">欠款和还款马上就做。</p>
           <TripMembers
             :active="groups.active"
             :left="groups.left"
@@ -234,7 +247,6 @@ async function onQuit() {
             @transfer="onTransfer"
             @remove="onRemove"
           />
-          <p class="soon">支出、欠款和还款马上就做。</p>
         </div>
       </div>
     </main>
@@ -275,6 +287,8 @@ async function onQuit() {
 // 手机：信息、成员上下排；PC：左边信息，右边成员
 .grid {
   display: grid;
+  // minmax(0, …)：列宽不跟着内容撑开，长的支出名称在行内省略，不会把页面撑出横向滚动
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--tm-space-5);
 }
 
@@ -371,6 +385,11 @@ async function onQuit() {
     border-color: var(--tm-primary);
     color: var(--tm-primary);
   }
+}
+
+.add-expense {
+  min-height: var(--tm-tap-min);
+  padding: 0 var(--tm-space-4);
 }
 
 .soon {
