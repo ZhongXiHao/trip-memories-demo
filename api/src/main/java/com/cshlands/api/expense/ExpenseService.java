@@ -15,12 +15,15 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.cshlands.api.common.ApiException.validationFailed;
+import static com.cshlands.api.expense.ExpenseTime.calculateDayIndex;
+import static com.cshlands.api.expense.ExpenseTime.parseDate;
+import static com.cshlands.api.expense.ExpenseTime.parseOccurredAt;
+import static com.cshlands.api.expense.ExpenseTime.parseTz;
 
 @Service
 class ExpenseService {
@@ -46,7 +49,7 @@ class ExpenseService {
     ExpensePreview preview(long userId, long tripId, ExpenseRequest request) {
         ActiveMember me = memberService.requireActiveMember(userId, tripId);
         int roundingUnit = validate(tripId, request, membersAlreadyIn(me, tripId, request.expenseId()));
-        List<SplitView> splits = split(me, request, roundingUnit);
+        List<SplitView> splits = SplitCalculator.split(me.memberId(), request, roundingUnit);
         return new ExpensePreview(request.amountMinor(), request.currency(), splits, List.of());
     }
 
@@ -73,7 +76,7 @@ class ExpenseService {
             }
 
             int roundingUnit = validate(tripId, request);
-            List<SplitView> splits = split(me, request, roundingUnit);
+            List<SplitView> splits = SplitCalculator.split(me.memberId(), request, roundingUnit);
 
             // 校验是否为真实带时区：Z 或 +09:00。可选字段，没传就用默认值，不校验
             if (request.occurredAt() != null) {
@@ -90,13 +93,6 @@ class ExpenseService {
             }
         }
         throw new IllegalStateException("Expense with clientUuid " + clientUuid + " could not be created or found");
-    }
-
-    private static String parseTz(String occurredTz) {
-        if (!ZoneId.getAvailableZoneIds().contains(occurredTz)) {
-            throw validationFailed("occurredTz", "must be an IANA time zone, e.g. Asia/Tokyo");
-        }
-        return occurredTz;
     }
 
     /**
@@ -189,7 +185,7 @@ class ExpenseService {
         Instant occurredAt = request.occurredAt() == null ? existing.occurredAt() : parseOccurredAt(request.occurredAt());
         String occurredTz = request.occurredTz() == null ? existing.occurredTz() : parseTz(request.occurredTz());
 
-        List<NewSplit> newSplits = split(me, request, roundUnit).stream().map(splitView -> new NewSplit(tripId, expenseId, splitView.memberId(), splitView.amountMinor())).collect(Collectors.toList());
+        List<NewSplit> newSplits = SplitCalculator.split(me.memberId(), request, roundUnit).stream().map(splitView -> new NewSplit(tripId, expenseId, splitView.memberId(), splitView.amountMinor())).collect(Collectors.toList());
 
         UpdateExpense updateExpense = UpdateExpense.fromRequest(tripId, expenseId, me.memberId(), request, occurredAt, occurredTz);
 
@@ -209,18 +205,6 @@ class ExpenseService {
         throw ApiException.of(ErrorCode.VERSION_CONFLICT, "Expense with expenseId " + existing.id() + " has been updated by another request. Please refresh and try again.");
     }
 
-    private static LocalDate parseDate(String date) {
-        if (date == null) {
-            return null;
-        }
-        // 日期必须是 yyyy-MM-dd
-        try {
-            return LocalDate.parse(date);
-        } catch (DateTimeParseException e) {
-            throw validationFailed("date", "must be a valid date in the format yyyy-MM-dd");
-        }
-    }
-
     /**
      * 用库里实际生效的值（含默认值）拼出支出对象：分摊从库里取，dayIndex 按这笔自己的时区算
      */
@@ -228,22 +212,6 @@ class ExpenseService {
         List<SplitRow> splits = expenseMapper.findSplits(row.id());
         Long dayIndex = calculateDayIndex(row.occurredAt(), ZoneId.of(row.occurredTz()), tripClock.startDate());
         return ExpenseView.of(row, splits, dayIndex);
-    }
-
-    private static Long calculateDayIndex(Instant occurredAt, ZoneId tz, LocalDate startDate) {
-        if (startDate == null) {
-            return null;
-        }
-        LocalDate occurredDate = occurredAt.atZone(tz).toLocalDate();
-        return ChronoUnit.DAYS.between(startDate, occurredDate) + 1;
-    }
-
-    private static Instant parseOccurredAt(String occurredAt) {
-        try {
-            return Instant.parse(occurredAt);
-        } catch (DateTimeParseException e) {
-            throw validationFailed("occurredAt", "must be a valid ISO-8601 timestamp with timezone, e.g. 2023-03-15T10:00:00Z or 2023-03-15T19:00:00+09:00");
-        }
     }
 
     /**
@@ -299,7 +267,7 @@ class ExpenseService {
         requireNoDuplicateMembers(request.splits() == null ? List.of() : request.splits());
 
         int roundingUnit = requireRoundingUnit(request.currency());
-        Map<Long, Long> requested = split(me, request, roundingUnit).stream()
+        Map<Long, Long> requested = SplitCalculator.split(me.memberId(), request, roundingUnit).stream()
                 .collect(Collectors.toMap(SplitView::memberId, SplitView::amountMinor));
         Map<Long, Long> stored = expenseMapper.findSplits(existing.id()).stream()
                 .collect(Collectors.toMap(SplitRow::memberId, SplitRow::amountMinor));
@@ -307,7 +275,7 @@ class ExpenseService {
     }
 
     /**
-     * 要查库的校验：币别、取整、成员（都在籍）。返回币别的取整单位，给 {@link #split} 用。
+     * 要查库的校验：币别、取整、成员（都在籍）。返回币别的取整单位，给 {@link SplitCalculator#split} 用。
      * 重放已有支出时不调它：成员可能后来退出了，那不该让重放失败。
      */
     private int validate(long tripId, SplitInput request) {
@@ -319,7 +287,7 @@ class ExpenseService {
      */
     private int validate(long tripId, SplitInput request, Set<Long> existingMemberIds) {
         int roundingUnit = requireRoundingUnit(request.currency());
-        requireRoundable(request.amountMinor(), roundingUnit);
+        SplitCalculator.requireRoundable(request.amountMinor(), roundingUnit);
         requireValidMembers(tripId, request, existingMemberIds);
         return roundingUnit;
     }
@@ -342,96 +310,6 @@ class ExpenseService {
         return memberIds;
     }
 
-    /**
-     * 按分摊方式算出每个人的分摊。不查成员，只看请求本身。
-     */
-    private static List<SplitView> split(ActiveMember me, SplitInput request, int roundingUnit) {
-        return switch (request.splitMode()) {
-            case NONE -> personalSplit(me.memberId(), request);
-            case EQUAL -> equalSplits(request, roundingUnit);
-            case CUSTOM -> customSplits(request, roundingUnit);
-        };
-    }
-
-    // ---- 三种分摊方式 ----
-
-    /**
-     * 个人支出：不带 splits，付款人必须是自己，一条分摊 = 总额
-     */
-    private static List<SplitView> personalSplit(long currentMemberId, SplitInput request) {
-        if (hasSplits(request)) {
-            throw validationFailed("splits", "must be null or empty when splitMode is NONE");
-        }
-        if (request.paidByMemberId() != currentMemberId) {
-            throw validationFailed("paidByMemberId", "must be the current user when splitMode is NONE");
-        }
-        return List.of(new SplitView(request.paidByMemberId(), request.amountMinor(), null));
-    }
-
-    /**
-     * 平均分：余数一次性给 {@link #remainderHolderId} 选出的那个人，其余人拿整份
-     */
-    private static List<SplitView> equalSplits(SplitInput request, int roundingUnit) {
-        List<SplitRequest> members = requireSplits(request);
-        long totalMinor = request.amountMinor();
-        long remainderMinor = totalMinor % ((long) roundingUnit * members.size());
-        long shareMinor = (totalMinor - remainderMinor) / members.size();
-        long remainderHolderId = remainderHolderId(request.paidByMemberId(), members);
-
-        List<SplitView> splits = new ArrayList<>(members.size());
-        for (SplitRequest member : members) {
-            boolean holdsRemainder = remainderMinor > 0 && member.memberId() == remainderHolderId;
-            splits.add(holdsRemainder
-                    ? new SplitView(member.memberId(), shareMinor + remainderMinor, remainderMinor)
-                    : new SplitView(member.memberId(), shareMinor, null));
-        }
-        return splits;
-    }
-
-    /**
-     * 余数给付款人；付款人不在名单里则给名单第一位（见契约「记账预览」）
-     */
-    private static long remainderHolderId(long payerId, List<SplitRequest> members) {
-        boolean payerIsListed = members.stream().anyMatch(member -> member.memberId() == payerId);
-        return payerIsListed ? payerId : members.get(0).memberId();
-    }
-
-    /**
-     * 自定义：先逐项校验，再校验之和等于总额，这样错误码不取决于金额的顺序
-     */
-    private static List<SplitView> customSplits(SplitInput request, int roundingUnit) {
-        List<SplitView> splits = new ArrayList<>();
-        for (SplitRequest split : requireSplits(request)) {
-            Long amountMinor = split.amountMinor();
-            if (amountMinor == null) {
-                throw validationFailed("splits", "amount must not be null");
-            }
-            if (amountMinor < 0) {
-                throw validationFailed("splits", "amount must not be negative");
-            }
-            requireRoundable(amountMinor, roundingUnit);
-            splits.add(new SplitView(split.memberId(), amountMinor, null));
-        }
-        requireSumEquals(request.amountMinor(), splits);
-        return splits;
-    }
-
-    /**
-     * 用总额往下减而不是累加：每项都 >= 0，减到负数就说明超了，不会溢出
-     */
-    private static void requireSumEquals(long totalMinor, List<SplitView> splits) {
-        long remainingMinor = totalMinor;
-        for (SplitView split : splits) {
-            remainingMinor -= split.amountMinor();
-            if (remainingMinor < 0) {
-                break;
-            }
-        }
-        if (remainingMinor != 0) {
-            throw splitSumMismatch();
-        }
-    }
-
     // ---- 校验 ----
 
     private int requireRoundingUnit(String currencyCode) {
@@ -440,14 +318,6 @@ class ExpenseService {
             throw validationFailed("currency", "unsupported currency");
         }
         return currency.roundingUnit();
-    }
-
-    private static void requireRoundable(long amountMinor, int roundingUnit) {
-        if (amountMinor % roundingUnit != 0) {
-            // 当单位是 1 时，只允许保留小数后两位
-            String message = roundingUnit == 100 ? "Amount must be an integer" : "Amount must be 2 decimal places";
-            throw ApiException.of(ErrorCode.AMOUNT_NOT_ROUNDABLE, message);
-        }
     }
 
     /**
@@ -476,23 +346,5 @@ class ExpenseService {
                 throw validationFailed("splits", "duplicate memberId " + split.memberId());
             }
         }
-    }
-
-    private static boolean hasSplits(SplitInput request) {
-        return request.splits() != null && !request.splits().isEmpty();
-    }
-
-    /**
-     * equal 和 custom 必须带 splits
-     */
-    private static List<SplitRequest> requireSplits(SplitInput request) {
-        if (!hasSplits(request)) {
-            throw validationFailed("splits", "must not be null or empty when splitMode is " + request.splitMode());
-        }
-        return request.splits();
-    }
-
-    private static ApiException splitSumMismatch() {
-        return ApiException.of(ErrorCode.SPLIT_SUM_MISMATCH, "The sum of custom splits does not equal the total amount");
     }
 }
