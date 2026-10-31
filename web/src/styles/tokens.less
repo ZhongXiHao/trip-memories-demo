@@ -59,6 +59,7 @@
   --tm-page-max: 1120px;       // PC：内容区最大宽度
   --tm-page-narrow: 560px;     // PC：表单类页面（选择身份、登录）用更窄的内容区
   --tm-topbar-h: 56px;         // PC：顶部导航条高度
+  --tm-tabs-h: 44px;           // 手机：行程页的标签条高度（吸顶时下面的日期标题贴在它下面）
 
   // ---- 其它 ----
   --tm-tap-min: 44px;          // 最小可点击高度
@@ -90,6 +91,14 @@ html:root {
   --van-tabbar-item-text-color: var(--tm-muted);
   --van-tabbar-item-active-color: var(--tm-primary);
   --van-tabbar-item-font-size: var(--tm-text-xs);
+
+  // 标签条：当前标签用深色加粗 + 主色下划线，不只靠颜色区分
+  --van-tabs-line-height: var(--tm-tabs-h);
+  --van-tabs-nav-background: var(--tm-surface);
+  --van-tabs-bottom-bar-color: var(--tm-primary);
+  --van-tab-text-color: var(--tm-muted);
+  --van-tab-active-text-color: var(--tm-navy);
+  --van-tab-font-size: var(--tm-text-md);
 
   --van-button-primary-background: var(--tm-primary);
   --van-button-primary-border-color: var(--tm-primary);

@@ -16,7 +16,10 @@ defineEmits<{ back: [] }>()
 
 <template>
   <header class="board-header">
-    <div class="board-header__inner tm-container" :class="{ 'tm-container--narrow': narrow }">
+    <div
+      class="board-header__inner tm-container"
+      :class="{ 'tm-container--narrow': narrow, 'board-header__inner--meta': $slots.meta }"
+    >
       <div class="board-header__text">
         <button v-if="backLabel" type="button" class="board-header__back" @click="$emit('back')">
           <van-icon name="arrow-left" aria-hidden="true" />
@@ -24,6 +27,10 @@ defineEmits<{ back: [] }>()
         </button>
         <h1 class="board-header__title">{{ title }}</h1>
         <p v-if="subtitle" class="board-header__subtitle">{{ subtitle }}</p>
+        <!-- 标题下面的摘要（比如行程页的日期、币别、时区），代替一行纯文字的 subtitle -->
+        <div v-if="$slots.meta" class="board-header__meta">
+          <slot name="meta" />
+        </div>
       </div>
       <div v-if="$slots.action" class="board-header__action">
         <slot name="action" />
@@ -49,6 +56,11 @@ defineEmits<{ back: [] }>()
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--tm-space-3);
+}
+
+// 有摘要时标题区较高，右上角的操作按钮贴顶对齐（和"返回"同一行），不要掉到描述旁边
+.board-header__inner--meta {
+  align-items: flex-start;
 }
 
 .board-header__text {
@@ -88,6 +100,13 @@ defineEmits<{ back: [] }>()
   font-size: var(--tm-text-sm);
 }
 
+.board-header__meta {
+  margin-top: var(--tm-space-1);
+  // 深色底上的次要文字：白色 80%，对比度仍 > 7:1
+  color: rgb(255 255 255 / 80%);
+  font-size: var(--tm-text-sm);
+}
+
 .board-header__action {
   flex: none;
 }
@@ -109,7 +128,8 @@ defineEmits<{ back: [] }>()
     }
   }
 
-  .board-header__subtitle {
+  .board-header__subtitle,
+  .board-header__meta {
     color: var(--tm-muted);
   }
 }

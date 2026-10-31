@@ -155,17 +155,17 @@ async function onConfirm(fields: ExpenseFields) {
 
       <div v-else-if="state === 'not-found'" class="status status--box" role="alert">
         <p class="status__text">找不到这笔支出：它可能已经被删除，或者你已经不在这个行程里了。</p>
-        <van-button size="small" plain type="primary" @click="goTrip">返回行程</van-button>
+        <van-button size="small" plain type="primary" class="tm-button-secondary" @click="goTrip">返回行程</van-button>
       </div>
 
       <div v-else-if="state === 'forbidden'" class="status status--box" role="alert">
         <p class="status__text">只有付款人或记账人可以修改这笔支出。</p>
-        <van-button size="small" plain type="primary" @click="goDetail">返回支出</van-button>
+        <van-button size="small" plain type="primary" class="tm-button-secondary" @click="goDetail">返回支出</van-button>
       </div>
 
       <div v-else-if="state === 'error'" class="status status--box" role="alert">
         <p class="status__text">{{ errorMessage }}</p>
-        <van-button size="small" plain type="primary" @click="load">重试</van-button>
+        <van-button size="small" plain type="primary" class="tm-button-secondary" @click="load">重试</van-button>
       </div>
 
       <ExpenseForm

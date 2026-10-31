@@ -18,6 +18,7 @@ declare module 'vue' {
     CurrencyAmount: typeof import('./components/CurrencyAmount.vue')['default']
     CurrencyTag: typeof import('./components/CurrencyTag.vue')['default']
     ExpenseForm: typeof import('./components/ExpenseForm.vue')['default']
+    MoreMenu: typeof import('./components/MoreMenu.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     TripExpenses: typeof import('./components/TripExpenses.vue')['default']
@@ -35,7 +36,9 @@ declare module 'vue' {
     VanPopover: typeof import('vant/es')['Popover']
     VanPopup: typeof import('vant/es')['Popup']
     VanPullRefresh: typeof import('vant/es')['PullRefresh']
+    VanTab: typeof import('vant/es')['Tab']
     VanTabbar: typeof import('vant/es')['Tabbar']
     VanTabbarItem: typeof import('vant/es')['TabbarItem']
+    VanTabs: typeof import('vant/es')['Tabs']
   }
 }

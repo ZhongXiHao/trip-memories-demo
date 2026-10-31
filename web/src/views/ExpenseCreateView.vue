@@ -150,12 +150,12 @@ async function onConfirm(fields: ExpenseFields) {
 
       <div v-else-if="state === 'not-found'" class="status status--box" role="alert">
         <p class="status__text">找不到这个行程，或者你已经不在这个行程里了。</p>
-        <van-button size="small" plain type="primary" @click="goList">回到我的行程</van-button>
+        <van-button size="small" plain type="primary" class="tm-button-secondary" @click="goList">回到我的行程</van-button>
       </div>
 
       <div v-else-if="state === 'error'" class="status status--box" role="alert">
         <p class="status__text">{{ errorMessage }}</p>
-        <van-button size="small" plain type="primary" @click="load">重试</van-button>
+        <van-button size="small" plain type="primary" class="tm-button-secondary" @click="load">重试</van-button>
       </div>
 
       <ExpenseForm
