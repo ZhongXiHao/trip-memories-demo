@@ -69,6 +69,12 @@ const MESSAGES: Record<string, string> = {
   UNAUTHENTICATED: '身份已失效，请重新选择身份',
   FORBIDDEN: '你没有权限这样做',
   NOT_FOUND: '内容不存在，或者你已经不在这个行程里了',
+  AMOUNT_NOT_ROUNDABLE: '金额的小数位数不对，这个币别不支持这么细的金额',
+  SPLIT_SUM_MISMATCH: '每人分摊的金额加起来要等于总额',
+  MEMBER_NOT_IN_TRIP: '付款人或分摊的人不是这个行程的成员，刷新后重选',
+  MEMBER_LEFT: '付款人或分摊的人已经退出行程，刷新后重选',
+  VERSION_CONFLICT: '这条内容刚被别人改过，刷新后再改',
+  IDEMPOTENCY_KEY_REUSED: '这一笔之前已经提交过，内容不一样。回到列表看看是否已经记上',
 }
 
 /** 给用户看的错误文字（中文）。表单字段错误由页面自己用 fieldMessage 处理。 */
