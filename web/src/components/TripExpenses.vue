@@ -78,7 +78,7 @@ defineExpose({ reload: load })
 
     <div v-else-if="state === 'error'" class="status status--box" role="alert">
       <p class="status__text">支出没加载出来：{{ errorMessage }}</p>
-      <van-button size="small" plain type="primary" @click="load">重试</van-button>
+      <van-button size="small" plain type="primary" class="tm-button-secondary" @click="load">重试</van-button>
     </div>
 
     <p v-else-if="expenses.length === 0" class="empty">还没有支出。</p>

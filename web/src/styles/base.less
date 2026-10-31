@@ -69,6 +69,13 @@ a,
   box-shadow: var(--tm-ring);
 }
 
+// 次要按钮（描边）：同一屏的次要按钮尺寸一致，高度满足 44px 的点击区。用法见 DESIGN.md「按钮」。
+// 两个类名叠加，优先级高过 Vant 的 .van-button--small，和样式加载顺序无关。
+.tm-button-secondary.van-button {
+  min-height: var(--tm-tap-min);
+  padding-inline: var(--tm-space-4);
+}
+
 // 金额、币别代码、ID：等宽数字
 .tm-num {
   font-family: var(--tm-font-num);
