@@ -29,7 +29,7 @@
 | 400 | SPLIT_SUM_MISMATCH | `custom` 模式分摊之和 ≠ 总额 |
 | 400 | MEMBER_NOT_IN_TRIP | 付款人或分摊者不是本行程成员 |
 | 400 | MEMBER_LEFT | 涉及已退出的成员（还款的对方除外，见还款） |
-| 400 | REPAYMENT_EXCEEDS_DEBT | 还款的销帐金额超过该币别当前欠款 |
+| 400 | REPAYMENT_EXCEEDS_DEBT | 还款的销帐金额超过该币别当前欠款（针对某笔支出还款时，还有这笔的限额） |
 | 401 | UNAUTHENTICATED | 没有有效登录态 |
 | 403 | FORBIDDEN | 没有权限（不是付款人或记账人却要改删、不是 Owner 却要管成员…） |
 | 404 | NOT_FOUND | 资源不存在、已删除，或不是该 Trip 的成员 |
@@ -254,7 +254,17 @@ Trip 对象：
 
 ## 欠/还款
 
-**怎么算**：只有共同支出产生欠款（个人支出不分账）。欠款按币别分开记，不做换算，也不跨币别互抵。一对一净额 = 支出产生的欠款 − 已确认还款的销帐金额。待确认（`pending`）的还款不抵债，另列。
+**怎么算**：只有共同支出产生欠款（个人支出不分账）。欠款按币别分开记，不做换算，也不跨币别互抵；已退出的成员照常计入。待确认（`pending`）的还款不抵债，另列。
+
+对每个币别、每两个人 A、B，**一对一净额**（同一币别内双向轧差）：
+
+```
+净额(A→B) = A 欠 B 的分摊之和 − B 欠 A 的分摊之和 − 已确认还款(A→B)的销帐金额 + 已确认还款(B→A)的销帐金额
+```
+
+`> 0` 输出「A 欠 B」，`< 0` 输出「B 欠 A」，`= 0` 不输出。默认不做传递化简：A 欠 B、B 欠 C 不会合并成 A 欠 C（想要合并见总览的 `simplify`）。
+
+**净额可能反向**：删除支出、修改金额后，已确认的还款可能比现在的欠款还多，净额变负，欠款就反过来由原来的收款方欠原来的付款方。这是「差额回到欠款里」的直接结果，系统不阻止删除有已确认还款关联的支出。
 
 ### 欠款
 
@@ -264,12 +274,17 @@ Trip 对象：
 {"fromMemberId": 5, "toMemberId": 3, "currency": "JPY", "amountMinor": 340000, "pendingMinor": 100000}
 ```
 
-`amountMinor` 是还欠多少；`pendingMinor` 是同方向、已标记但对方还没确认的还款金额。
+`amountMinor` 是还欠多少；`pendingMinor` 是同方向（`from` 付给 `to`）、同币别、已标记但对方还没确认且没取消的还款的销帐金额之和，对所有在籍成员可见（还款列表也是）。它可能大于 `amountMinor`（例如支出被删之后）。
 
 1. 总览：GET /trips/{tripId}/debts
-   - 响应 `{"items": [欠款对象]}`，Trip 内每两人之间、按币别分列。可选参数 `memberId`：只看和这个人有关的。「我欠谁、谁欠我」传自己的 `memberId`。
+   - 响应 `{"items": [欠款对象]}`，Trip 内每两人之间、按币别分列，按 `fromMemberId`、`toMemberId`、`currency` 升序。
+   - 可选参数 `memberId`：只看和这个人有关的（他欠别人、别人欠他）。「我欠谁、谁欠我」传自己的 `memberId`。可以是已退出的成员；不属于这个行程的返回空数组，不报错。
+   - 可选参数 `simplify`（`true` / `false`，默认 `false`，其他值 400 `VALIDATION_FAILED`）：为 `true` 时做**传递化简**，给出一组「建议转账」：A 欠 B、B 欠 C 合并成 A 欠 C。做法是对每个币别分别算每个成员的余额（别人欠他的 − 他欠别人的，由上面的一对一净额汇总），再反复拿余额最大的债权人和余额最大的债务人对冲，金额取较小者，余额相同时取 `memberId` 小的，直到余额清零。结果能让所有人结清，但**不保证笔数最少**。
+     - 建议转账只用于显示：`pendingMinor` 恒为 `0`；创建还款**仍按真实的一对一欠款**（`simplify=false`）校验额度，所以化简出来的 A 欠 C，如果 A、C 之间没有真实欠款，不能直接据此创建还款。
+     - 同时给 `memberId` 时，先对整个行程化简，再按 `memberId` 筛。
 2. 一对一净额：GET /trips/{tripId}/debts/{memberId}
-   - 当前用户和这个成员之间的欠款，按币别分列，响应同上。
+   - 当前用户和这个成员之间的欠款，按币别分列，响应同上，不支持 `simplify`。
+   - `memberId` 不属于这个行程 → 404；是自己 → 400 `VALIDATION_FAILED`（`fields` 指向 `memberId`）；已退出的成员允许。
 
 ### 还款
 
@@ -287,7 +302,8 @@ Trip 对象：
 ```
 
 - 同时保存「销帐」（抵销了多少欠款）和「实付」（实际转了多少钱）两组金额，汇率是衍生值（`paid / cleared`），接口不返回，需要显示时前端自己算。同币别时两组金额相等。
-- 一次请求 = 一次转账 = 一个 `settlementGroupId`（取请求的 `clientUuid`）；转账里每条被结清的欠款是一条还款记录。
+- 一次请求 = 一次转账 = 一个 `settlementGroupId`（取请求的 `clientUuid`）；转账里每条被结清的欠款是一条还款记录。同一行程里，同一个 `settlementGroupId` 下每个 `clearedCurrency` 至多一条。
+- `status`：`pending`（已标记，等收款方确认）、`confirmed`（已确认，抵销欠款）、`cancelled`（待确认时被取消，不抵销欠款；库里用 `deleted_at` 表示，接口上统一是 `status`，不另给 `deletedAt`）。
 
 1. 创建还款：POST /trips/{tripId}/repayments
 2. 还款列表：GET /trips/{tripId}/repayments
@@ -306,34 +322,47 @@ Trip 对象：
 | fromMemberId | 是 | 付款方 |
 | toMemberId | 是 | 收款方，不能和付款方相同 |
 | paidCurrency | 是 | 实际转账的币别 |
-| items | 是 | 要结清的欠款，每项 `{clearedCurrency, clearedAmountMinor, paidAmountMinor}`；各项 `clearedCurrency` 不能重复；同币别时 `paidAmountMinor` 必须等于 `clearedAmountMinor` |
-| expenseId | 否 | 针对某一笔支出还款时填；该笔必须是 `toMemberId` 付的款，且 `fromMemberId` 在它的分摊里；此时 `items` 只能有一项 |
+| items | 是 | 要结清的欠款，每项 `{clearedCurrency, clearedAmountMinor, paidAmountMinor}`，三个字段都必填；各项 `clearedCurrency` 不能重复；同币别（`clearedCurrency` = `paidCurrency`）时 `paidAmountMinor` 必须等于 `clearedAmountMinor` |
+| expenseId | 否 | 针对某一笔支出还款时填，见下「针对某笔支出还款」；此时 `items` 只能有一项 |
 | note | 否 | ≤ 512 |
 
 规则：
 
 - 创建者必须是 `fromMemberId` 或 `toMemberId` 之一，其余人 403。
-- **创建者是付款方**（标记已还款）→ 状态 `pending`，等收款方确认；**创建者是收款方**（直接记「已收到」）→ 状态直接 `confirmed`。
-- 创建者必须是在籍成员；对方可以已退出（收款方要记下「已收到」一个已退出的人的还款，应该可以）。
-- 每项 `clearedAmountMinor` 不能超过该币别当前欠款，也就是 `amountMinor` 减去同方向其他待确认的还款，否则 400 `REPAYMENT_EXCEEDS_DEBT`。少还（部分结清）允许，剩下的欠款继续存在。金额也要是币别 `roundingUnit` 的整数倍。
-- 响应 201 `{"settlementGroupId": "...", "items": [还款对象]}`；按幂等规则重复提交返回 200。
+- **创建者是付款方**（标记已还款）→ 状态 `pending`，等收款方确认；**创建者是收款方**（直接记「已收到」）→ 状态直接 `confirmed`，`confirmedAt` 为创建时间。
+- 创建者必须是在籍成员；对方可以已退出（收款方要记下「已收到」一个已退出的人的还款，应该可以；付款方给已退出的人标记已还款也允许，但之后只能取消，没有人能确认）。`fromMemberId`、`toMemberId` 不属于本行程 → 400 `MEMBER_NOT_IN_TRIP`；两者相同 → 400 `VALIDATION_FAILED`（`fields` 指向 `toMemberId`）。
+- 金额：`clearedAmountMinor` 要是 `clearedCurrency` 的 `roundingUnit` 的整数倍，`paidAmountMinor` 要是 `paidCurrency` 的整数倍，都 > 0，否则 400 `AMOUNT_NOT_ROUNDABLE` / `VALIDATION_FAILED`。跨币别时不校验汇率合不合理。各项 `paidAmountMinor` 之和就是这次转账的总额，不另存。币别必须在币别列表里。
+- **额度**：每项 `clearedAmountMinor` 不能超过该币别当前可还的欠款，也就是（`from` 欠 `to` 的）`amountMinor` 减去同方向其他待确认的还款（不足 0 按 0 算），否则 400 `REPAYMENT_EXCEEDS_DEBT`。「当前没有 `from` 欠 `to` 的欠款」（净额为 0 或方向相反）同样是这个错误，不是 `VALIDATION_FAILED`。少还（部分结清）允许，剩下的欠款继续存在。
+- **错误的先后**：不是在籍成员 → 404；已有同一 `clientUuid` 的记录 → 按下面的重放处理；创建者不是 `from` / `to` → 403；`expenseId` 看不见 → 404；请求本身有错 → 400；额度不足 → 400 `REPAYMENT_EXCEEDS_DEBT`。`fields` 指向顶层字段名（如 `items`、`paidCurrency`），不带下标。
+- **重放**（同一 `(tripId, clientUuid)`，通用约定里的幂等规则）：创建者必须和原来相同（创建者决定是 `pending` 还是 `confirmed`，换人就是不同的意图）。内容比较：`fromMemberId`、`toMemberId`、`paidCurrency`、`items`（按 `clearedCurrency` 配对，比三个金额）、`expenseId`、`note`，没带的可选字段不参与比较。内容一致 → 200 返回已有的那组；内容不一致、创建者不同、或这组里有已取消的行 → 409 `IDEMPOTENCY_KEY_REUSED`，消息一样。重放不再检查成员和额度（成员后来退出，原样重放仍是 200）。
+- 响应 201 `{"settlementGroupId": "...", "items": [还款对象]}`，`items` 按 `clearedCurrency` 升序；按幂等规则重复提交返回 200。
+
+#### 针对某笔支出还款（`expenseId`）
+
+- 资格：该笔是共同支出，是 `toMemberId` 付的款，`fromMemberId` 在它的分摊里，`clearedCurrency` 等于这笔支出的币别，`items` 只有一项。不满足 → 400 `VALIDATION_FAILED`（`fields` 指向 `expenseId`，`items` 超过一项时指向 `items`）。
+- 看不见这笔（不存在、已删除、别的行程的、别人的个人支出）→ 404。
+- **限额**：除了整对欠款的额度，还不能超过 `fromMemberId` 在这笔支出里的分摊额，减去这笔上 `fromMemberId` 已有的、没取消的还款（`pending` 和 `confirmed`）的销帐金额；两者取小，超过 → 400 `REPAYMENT_EXCEEDS_DEBT`。
+- 这笔支出之后被删：已有的还款记录保留（`expenseId` 仍指向它），这笔产生的欠款随支出一起消失，已确认的还款因此可能比现在的欠款还多，净额反向，原来的收款方反过来欠原来的付款方（见「怎么算」）。被删的支出不能再被指定。
 
 ### 2. 还款列表
 
-查询参数（都可选）：`status`（`pending` / `confirmed`）、`memberId`（付款方或收款方是他）、`settlementGroupId`。
-响应 `{"items": [还款对象]}`。只返回当前用户是付款方或收款方的还款。
+查询参数（都可选）：`status`（`pending` / `confirmed`，其他值 400；已取消的不会出现在列表里）、`memberId`（付款方或收款方是他；不属于本行程的返回空数组）、`settlementGroupId`（不是 UUID 格式 400）。
+响应 `{"items": [还款对象]}`，在籍成员都能看到这个行程里的全部还款（没取消的）。排序：`createdAt` 倒序，相同的按 `id` 倒序。
 
 ### 3、4. 确认
 
-- 只有收款方（`toMemberId`）能确认，其他人 403。
-- 整组确认是一条 `UPDATE`（只更新该组里 `pending` 且没取消的），不会因为组里有已取消的一条整体失败。
-- 重复确认已经确认的返回 200，不报错。已取消的返回 404。
-- 响应：单条返回还款对象；整组返回 `{"items": [该组当前所有还款对象]}`。
+- 在籍成员都看得见行程里的还款，所以：只有收款方（`toMemberId`）能确认，其他在籍成员（包括付款方）403；不是在籍成员 404。
+- 整组确认是一条 `UPDATE`（只更新该组里 `pending` 且没取消的），不会因为组里有已取消的一条整体失败，`version` 加一。组不存在、或组里的行全部已取消 → 404。
+- 重复确认已经确认的返回 200，不报错。单条确认已取消的返回 404。
+- 确认**不再检查额度**：钱已经收到，是历史事实，净额因此可能反向（见「怎么算」）。
+- 响应：单条返回还款对象；整组返回 `{"items": [该组所有还款对象]}`（已取消的行也在其中，`status` 为 `cancelled`）。
 
 ### 5、6. 取消
 
-- 付款方、收款方任一方都可以取消，只适用于 `pending` 的还款。已确认的 → 409 `REPAYMENT_ALREADY_CONFIRMED`。软删除，之后列表里不再出现。
-- 对已经取消的重复取消返回 200。响应格式同确认。
+- 付款方、收款方任一方都可以取消，只适用于 `pending` 的还款；其他在籍成员 403，不是在籍成员 404。取消后 `status` 是 `cancelled`，`version` 加一，之后列表里不再出现。
+- 单条：已确认的 → 409 `REPAYMENT_ALREADY_CONFIRMED`；对已经取消的重复取消返回 200。
+- 整组：取消该组里所有 `pending` 的行；已确认的行保留，不报错。只有**一行都没取消到、且组里有已确认的行**才 409 `REPAYMENT_ALREADY_CONFIRMED`；组里全是已取消的，重复取消返回 200；组不存在 404。
+- 响应格式同确认：单条返回还款对象（`status` 为 `cancelled`）；整组返回 `{"items": [该组所有还款对象]}`。
 - 确认和取消同时发生时，以先成功的为准：两者都是带「`pending` 且未取消」条件的单条 `UPDATE`，看影响行数，不会出现「确认了一条已取消的」。
 
 ### 修改还款
