@@ -17,15 +17,18 @@ import { deleteTrip, getTrip, type TripView } from '@/api/trips'
 import AddMemberPopup from '@/components/AddMemberPopup.vue'
 import BoardHeader from '@/components/BoardHeader.vue'
 import CurrencyTag from '@/components/CurrencyTag.vue'
+import MoreMenu from '@/components/MoreMenu.vue'
 import TripExpenses from '@/components/TripExpenses.vue'
 import TripMembers from '@/components/TripMembers.vue'
 import { formatDateRange } from '@/utils/date'
 import { confirmAction } from '@/utils/dialog'
 import { roleLabel, splitMembers } from '@/utils/members'
-import { timezoneLabel } from '@/utils/timezones'
+import { tripMenuItems, type TripMenuKey } from '@/utils/menus'
+import { timezoneLabel, timezoneShortLabel } from '@/utils/timezones'
 import { showError } from '@/utils/toast'
 
-// 行程详情：行程信息、支出列表、成员管理。欠款和还款还是占位。
+// 行程详情：页头是行程摘要（日期、展示币别、时区，负责人有标签），下面是支出、欠款（占位）和成员。
+// 编辑、删除、退出行程都在页头的"⋯"菜单里（危险操作不常驻页面，见 DESIGN.md「按钮」）。
 const props = defineProps<{ tripId: number }>()
 
 const router = useRouter()
@@ -40,6 +43,7 @@ const showAdd = ref(false)
 
 const groups = computed(() => splitMembers(members.value))
 const isOwner = computed(() => trip.value?.myRole === 'owner')
+const menuItems = computed(() => (trip.value ? tripMenuItems(trip.value.myRole) : []))
 
 /** silent：操作之后刷新数据时不闪"正在加载"，页面保持原样直到新数据到达 */
 async function load(silent = false) {
@@ -153,6 +157,12 @@ async function onDelete() {
   })
 }
 
+function onMenu(key: TripMenuKey) {
+  if (key === 'edit') goEdit()
+  if (key === 'delete') void onDelete()
+  if (key === 'quit') void onQuit()
+}
+
 async function onQuit() {
   const ok = await confirmAction({
     title: '退出这个行程？',
@@ -172,14 +182,22 @@ async function onQuit() {
 
 <template>
   <div>
-    <BoardHeader
-      :title="trip?.name ?? '行程'"
-      :subtitle="trip ? formatDateRange(trip.startDate, trip.endDate) : undefined"
-      back-label="我的行程"
-      @back="goList"
-    >
+    <BoardHeader :title="trip?.name ?? '行程'" back-label="我的行程" @back="goList">
+      <template v-if="trip" #meta>
+        <p class="summary">
+          <span>{{ formatDateRange(trip.startDate, trip.endDate) }}</span>
+          <span class="summary__sep" aria-hidden="true">·</span>
+          <CurrencyTag :code="trip.displayCurrency" />
+          <span class="summary__sep" aria-hidden="true">·</span>
+          <span class="summary__zone" :title="timezoneLabel(trip.timezone)" :aria-label="`时区 ${timezoneLabel(trip.timezone)}`">
+            <van-icon name="clock-o" aria-hidden="true" />{{ timezoneShortLabel(trip.timezone) }}
+          </span>
+          <span v-if="isOwner" class="summary__role">{{ roleLabel(trip.myRole) }}</span>
+        </p>
+        <p v-if="trip.description" class="summary__description">{{ trip.description }}</p>
+      </template>
       <template #action>
-        <van-button v-if="isOwner" size="small" plain class="edit" :disabled="busy" @click="goEdit">编辑</van-button>
+        <MoreMenu :items="menuItems" label="行程操作" :title="trip?.name" :disabled="busy" @select="onMenu" />
       </template>
     </BoardHeader>
 
@@ -191,52 +209,24 @@ async function onQuit() {
 
       <div v-else-if="state === 'not-found'" class="status status--box" role="alert">
         <p class="status__text">找不到这个行程，或者你已经不在这个行程里了。</p>
-        <van-button size="small" plain type="primary" @click="goList">回到我的行程</van-button>
+        <van-button size="small" plain type="primary" class="tm-button-secondary" @click="goList">回到我的行程</van-button>
       </div>
 
       <div v-else-if="state === 'error'" class="status status--box" role="alert">
         <p class="status__text">{{ errorMessage }}</p>
-        <van-button size="small" plain type="primary" @click="load()">重试</van-button>
+        <van-button size="small" plain type="primary" class="tm-button-secondary" @click="load()">重试</van-button>
       </div>
 
-      <div v-else-if="trip" class="grid">
-        <div class="side">
-          <section class="card" aria-label="行程信息">
-            <p v-if="trip.description" class="info__description">{{ trip.description }}</p>
-            <dl class="facts">
-              <div class="facts__row">
-                <dt>时区</dt>
-                <dd>{{ timezoneLabel(trip.timezone) }}</dd>
-              </div>
-              <div class="facts__row">
-                <dt>展示币别</dt>
-                <dd><CurrencyTag :code="trip.displayCurrency" /></dd>
-              </div>
-              <div class="facts__row">
-                <dt>我的身份</dt>
-                <dd>{{ roleLabel(trip.myRole) }}</dd>
-              </div>
-            </dl>
-          </section>
-
-          <div class="leave">
-            <template v-if="isOwner">
-              <p class="leave__note">你是负责人。想退出，要先把负责人转让给别的成员。</p>
-              <van-button plain type="danger" block :disabled="busy" @click="onDelete">删除行程</van-button>
-            </template>
-            <van-button v-else plain type="danger" block :disabled="busy" @click="onQuit">退出行程</van-button>
-          </div>
-        </div>
-
-        <div class="main">
-          <TripExpenses :trip-id="tripId" :members="members" :display-currency="trip.displayCurrency">
-            <template #action>
-              <van-button type="primary" size="small" icon="plus" class="add-expense" :disabled="busy" @click="goNewExpense">
-                记一笔
-              </van-button>
-            </template>
-          </TripExpenses>
-          <p class="soon">欠款和还款马上就做。</p>
+      <div v-else-if="trip" class="main">
+        <TripExpenses :trip-id="tripId" :members="members" :display-currency="trip.displayCurrency">
+          <template #action>
+            <van-button type="primary" size="small" icon="plus" class="add-expense" :disabled="busy" @click="goNewExpense">
+              记一笔
+            </van-button>
+          </template>
+        </TripExpenses>
+        <p class="soon">欠款和还款马上就做。</p>
+        <div class="members">
           <TripMembers
             :active="groups.active"
             :left="groups.left"
@@ -247,6 +237,7 @@ async function onQuit() {
             @transfer="onTransfer"
             @remove="onRemove"
           />
+          <p v-if="isOwner" class="members__note">你是负责人。想退出，要先把负责人转让给别的成员。</p>
         </div>
       </div>
     </main>
@@ -284,107 +275,63 @@ async function onQuit() {
   margin: 0;
 }
 
-// 手机：信息、成员上下排；PC：左边信息，右边成员
-.grid {
-  display: grid;
-  // minmax(0, …)：列宽不跟着内容撑开，长的支出名称在行内省略，不会把页面撑出横向滚动
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--tm-space-5);
-}
-
-.side,
 .main {
   display: flex;
   flex-direction: column;
   gap: var(--tm-space-5);
+  // 列宽不跟着内容撑开：长的支出名称在行内省略，不会把页面撑出横向滚动
+  min-width: 0;
 }
 
-@media (min-width: @bp-desktop) {
-  .grid {
-    grid-template-columns: 320px minmax(0, 1fr);
-    align-items: start;
-  }
-
-  .side {
-    position: sticky;
-    top: calc(var(--tm-topbar-h) + var(--tm-space-4));
-  }
-}
-
-// 手机上"退出行程"放在最下面，不要紧挨着成员列表
-@media (max-width: (@bp-desktop - 1px)) {
-  .side {
-    display: contents;
-  }
-
-  .leave {
-    order: 3;
-  }
-}
-
-.card {
-  padding: var(--tm-space-4);
-  border: 1px solid var(--tm-line);
-  border-radius: var(--tm-radius-card);
-  background: var(--tm-surface);
-}
-
-.info__description {
-  margin: 0 0 var(--tm-space-3);
-  overflow-wrap: anywhere;
-  white-space: pre-line;
-}
-
-.facts {
-  display: grid;
-  gap: var(--tm-space-3);
-  margin: 0;
-}
-
-.facts__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--tm-space-3);
-  min-height: 24px;
-
-  dt {
-    color: var(--tm-muted);
-    font-size: var(--tm-text-sm);
-  }
-
-  dd {
-    margin: 0;
-    text-align: right;
-  }
-}
-
-.leave {
+.members {
   display: flex;
   flex-direction: column;
   gap: var(--tm-space-3);
 }
 
-.leave__note {
+.members__note {
   margin: 0;
   color: var(--tm-muted);
   font-size: var(--tm-text-xs);
 }
 
-// 页头里的"编辑"：手机上页头是深色（白字白边）；PC 上页头变成普通标题区，改成主色描边
-.edit {
-  min-height: var(--tm-tap-min);
-  padding: 0 var(--tm-space-4);
-  border-color: rgb(255 255 255 / 60%);
-  background: transparent;
-  color: #fff;
+// 页头摘要：日期 · 币别 · 时区（· 负责人标签），描述最多两行
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tm-space-1) var(--tm-space-2);
+  margin: 0;
 }
 
-@media (min-width: @bp-desktop) {
-  .edit {
-    border-color: var(--tm-primary);
-    color: var(--tm-primary);
-  }
+.summary__sep {
+  opacity: 0.7;
+}
+
+.summary__zone {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tm-space-1);
+}
+
+// 深色页头上的描边标签；PC 上页头是浅色，换成深色描边
+.summary__role {
+  padding: 0 var(--tm-space-2);
+  border: 1px solid currentcolor;
+  border-radius: var(--tm-radius-tag);
+  font-size: var(--tm-text-xs);
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.summary__description {
+  display: -webkit-box;
+  margin: var(--tm-space-2) 0 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 
 .add-expense {

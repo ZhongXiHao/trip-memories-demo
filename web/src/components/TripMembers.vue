@@ -55,7 +55,7 @@ function manageable(member: MemberView): boolean {
       <h2 id="members-title" class="head__title">
         成员 <span class="head__count tm-num">{{ active.length }}</span>
       </h2>
-      <van-button v-if="isOwner" size="small" plain type="primary" class="head__add" :disabled="busy" @click="emit('add')">
+      <van-button v-if="isOwner" size="small" plain type="primary" class="tm-button-secondary" :disabled="busy" @click="emit('add')">
         添加成员
       </van-button>
     </div>
@@ -124,10 +124,6 @@ function manageable(member: MemberView): boolean {
   margin-left: var(--tm-space-1);
   color: var(--tm-muted);
   font-size: var(--tm-text-sm);
-}
-
-.head__add {
-  min-height: var(--tm-tap-min);
 }
 
 .list {

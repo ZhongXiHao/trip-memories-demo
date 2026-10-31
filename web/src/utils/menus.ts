@@ -1,3 +1,5 @@
+import type { MemberRole } from '@/api/trips'
+
 // 页头"⋯"菜单的内容：按身份和权限生成，纯函数，方便单元测试。
 // 危险操作（删除、退出）只出现在菜单里，不常驻页面；选中后页面还要再用 confirmAction 确认。见 DESIGN.md「按钮」。
 
@@ -22,4 +24,20 @@ export function expenseMenuItems(canModify: boolean): MenuItem<ExpenseMenuKey>[]
     { key: 'edit', name: '修改支出' },
     { key: 'delete', name: '删除支出', danger: true },
   ]
+}
+
+export type TripMenuKey = 'edit' | 'delete' | 'quit'
+
+/**
+ * 行程页：负责人可以编辑、删除行程；其他成员只能退出。
+ * 负责人不能直接退出（要先转让），所以菜单里不给负责人"退出行程"。
+ */
+export function tripMenuItems(role: MemberRole): MenuItem<TripMenuKey>[] {
+  if (role === 'owner') {
+    return [
+      { key: 'edit', name: '编辑行程' },
+      { key: 'delete', name: '删除行程', danger: true },
+    ]
+  }
+  return [{ key: 'quit', name: '退出行程', danger: true }]
 }
