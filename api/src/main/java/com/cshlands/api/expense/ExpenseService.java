@@ -2,6 +2,7 @@ package com.cshlands.api.expense;
 
 import com.cshlands.api.common.ApiException;
 import com.cshlands.api.common.ErrorCode;
+import com.cshlands.api.common.PageResult;
 import com.cshlands.api.common.RegexUtils;
 import com.cshlands.api.currency.CurrencyMapper;
 import com.cshlands.api.currency.CurrencyView;
@@ -28,13 +29,15 @@ class ExpenseService {
     private final ExpenseMapper expenseMapper;
     private final ExpenseWriter expenseWriter;
     private final TripService tripService;
+    private final ExpenseUpdater expenseUpdater;
 
-    ExpenseService(CurrencyMapper currencyMapper, MemberService memberService, ExpenseMapper expenseMapper, ExpenseWriter expenseWriter, TripService tripService) {
+    ExpenseService(CurrencyMapper currencyMapper, MemberService memberService, ExpenseMapper expenseMapper, ExpenseWriter expenseWriter, TripService tripService, ExpenseUpdater expenseUpdater) {
         this.currencyMapper = currencyMapper;
         this.memberService = memberService;
         this.expenseMapper = expenseMapper;
         this.expenseWriter = expenseWriter;
         this.tripService = tripService;
+        this.expenseUpdater = expenseUpdater;
     }
 
     /**
@@ -42,7 +45,7 @@ class ExpenseService {
      */
     ExpensePreview preview(long userId, long tripId, ExpenseRequest request) {
         ActiveMember me = memberService.requireActiveMember(userId, tripId);
-        int roundingUnit = validate(tripId, request);
+        int roundingUnit = validate(tripId, request, membersAlreadyIn(me, tripId, request.expenseId()));
         List<SplitView> splits = split(me, request, roundingUnit);
         return new ExpensePreview(request.amountMinor(), request.currency(), splits, List.of());
     }
@@ -78,9 +81,8 @@ class ExpenseService {
             }
 
             // 校验是否为合法 IANA
-            String occurredTz = request.occurredTz();
-            if (occurredTz != null && !ZoneId.getAvailableZoneIds().contains(occurredTz)) {
-                throw validationFailed("occurredTz", "must be an IANA time zone, e.g. Asia/Tokyo");
+            if (request.occurredTz() != null) {
+                parseTz(request.occurredTz());
             }
 
             if (expenseWriter.write(tripId, me.memberId(), tripClock, request, splits)) {
@@ -88,6 +90,13 @@ class ExpenseService {
             }
         }
         throw new IllegalStateException("Expense with clientUuid " + clientUuid + " could not be created or found");
+    }
+
+    private static String parseTz(String occurredTz) {
+        if (!ZoneId.getAvailableZoneIds().contains(occurredTz)) {
+            throw validationFailed("occurredTz", "must be an IANA time zone, e.g. Asia/Tokyo");
+        }
+        return occurredTz;
     }
 
     /**
@@ -119,6 +128,97 @@ class ExpenseService {
             throw ApiException.forbidden("Only the payer or the creator can delete this expense");
         }
         throw ApiException.notFound();
+    }
+
+    PageResult<ExpenseView> list(long userId, long tripId, String date, Long queryMemberId, String currency, ExpenseCategory category) {
+        ActiveMember me = memberService.requireActiveMember(userId, tripId);
+        LocalDate day = parseDate(date);
+        Instant occurredFrom = date == null ? null : day.atStartOfDay(ZoneId.of("UTC")).minusHours(14).toInstant();
+        Instant occurredTo = date == null ? null : day.plusDays(1).atStartOfDay(ZoneId.of("UTC")).plusHours(14).toInstant();
+        ExpenseQuery expenseQuery = new ExpenseQuery(tripId, me.memberId(), queryMemberId, currency, category, occurredFrom, occurredTo);
+
+        // occurredFrom、occurredTo 只是粗筛的 UTC 范围，是闭区间，精确的"当地日期"由 Service 里按 occurredTz 判断
+        List<ExpenseRow> expenses = expenseMapper.list(expenseQuery).stream().filter(expense -> {
+            if (date == null) {
+                return true;
+            }
+            LocalDate occurredDate = expense.occurredAt().atZone(ZoneId.of(expense.occurredTz())).toLocalDate();
+            return occurredDate.equals(day);
+        }).toList();
+        if (expenses.isEmpty()) {
+            return new PageResult<>(List.of());
+        }
+        // 获取所有分摊
+        List<ExpenseSplitRow> splits = expenseMapper.findSplitsByMultipleExpenseIds(expenses.stream().map(ExpenseRow::id).collect(Collectors.toList()));
+        // 转换为 Map<expenseId, List<ExpenseSplitRow>>
+        Map<Long, List<ExpenseSplitRow>> collect = splits.stream().collect(Collectors.groupingBy(ExpenseSplitRow::expenseId, Collectors.toList()));
+        // 获取行程开始日期
+        LocalDate startDate = tripService.getTripClock(userId, tripId).startDate();
+        // 转换为 ExpenseView
+        List<ExpenseView> expenseViews = expenses.stream().map(expense -> {
+            List<SplitRow> splitRows = collect.getOrDefault(expense.id(), List.of()).stream().map(split -> new SplitRow(split.memberId(), split.amountMinor())).toList();
+            Long dayIndex = calculateDayIndex(expense.occurredAt(), ZoneId.of(expense.occurredTz()), startDate);
+            return ExpenseView.of(expense, splitRows, dayIndex);
+        }).toList();
+
+        return new PageResult<>(expenseViews);
+    }
+
+    ExpenseView update(long userId, long tripId, long expenseId, UpdateExpenseRequest request) {
+        ActiveMember me = memberService.requireActiveMember(userId, tripId);
+        ExpenseRow existing = expenseMapper.findVisible(tripId, expenseId, me.memberId());
+        if (existing == null) {
+            throw ApiException.notFound();
+        }
+        // 校验是提交更新的成员是否可以更新该支出：付款人或记账人可以更新，其他人不行
+        if (me.memberId() != existing.createdByMemberId() && me.memberId() != existing.paidByMemberId()) {
+            throw ApiException.forbidden("Only the payer or the creator can update this expense");
+        }
+
+        // 不能在个人和共同支出之间切换
+        if ((existing.splitMode() == SplitMode.NONE) != (request.splitMode() == SplitMode.NONE)) {
+            throw validationFailed("splitMode", "Cannot switch between a personal expense and a trip expense");
+        }
+
+        // 获取该 expense 的分摊成员列表
+        Set<Long> existingMemberIds = expenseMapper.findSplits(existing.id()).stream().map(SplitRow::memberId).collect(Collectors.toSet());
+        existingMemberIds.add(existing.paidByMemberId()); // 有可能付款人不在分摊列表里，所以也要加上付款人
+        // 校验 currency、amountMinor，以及成员（数据库里已有的成员不会被校验，新增的则会）
+        int roundUnit = validate(tripId, request, existingMemberIds);
+
+        Instant occurredAt = request.occurredAt() == null ? existing.occurredAt() : parseOccurredAt(request.occurredAt());
+        String occurredTz = request.occurredTz() == null ? existing.occurredTz() : parseTz(request.occurredTz());
+
+        List<NewSplit> newSplits = split(me, request, roundUnit).stream().map(splitView -> new NewSplit(tripId, expenseId, splitView.memberId(), splitView.amountMinor())).collect(Collectors.toList());
+
+        UpdateExpense updateExpense = UpdateExpense.fromRequest(tripId, expenseId, me.memberId(), request, occurredAt, occurredTz);
+
+        boolean updated = expenseUpdater.update(updateExpense, newSplits);
+
+        ExpenseRow expenseAfterUpdated = expenseMapper.findVisible(tripId, expenseId, me.memberId());
+
+        if(expenseAfterUpdated == null) {
+            // 说明更新后该支出被删除了
+            throw ApiException.notFound();
+        }
+
+        if (updated) {
+            return toView(expenseAfterUpdated, tripService.getTripClock(userId, tripId));
+        }
+
+        throw ApiException.of(ErrorCode.VERSION_CONFLICT, "Expense with expenseId " + existing.id() + " has been updated by another request. Please refresh and try again.");
+    }
+
+    private static LocalDate parseDate(String date) {
+        if (date == null) {
+            return null;
+        }
+        // 日期必须是 yyyy-MM-dd
+        try {
+            return LocalDate.parse(date);
+        } catch (DateTimeParseException e) {
+            throw validationFailed("date", "must be a valid date in the format yyyy-MM-dd");
+        }
     }
 
     /**
@@ -210,17 +310,42 @@ class ExpenseService {
      * 要查库的校验：币别、取整、成员（都在籍）。返回币别的取整单位，给 {@link #split} 用。
      * 重放已有支出时不调它：成员可能后来退出了，那不该让重放失败。
      */
-    private int validate(long tripId, ExpenseRequest request) {
+    private int validate(long tripId, SplitInput request) {
+        return validate(tripId, request, Set.of());
+    }
+
+    /**
+     * existingMemberIds：修改某笔支出时，这笔里原本就有的人，即使已退出也放行；新加入的仍必须在籍。创建传空集合。
+     */
+    private int validate(long tripId, SplitInput request, Set<Long> existingMemberIds) {
         int roundingUnit = requireRoundingUnit(request.currency());
         requireRoundable(request.amountMinor(), roundingUnit);
-        requireValidMembers(tripId, request);
+        requireValidMembers(tripId, request, existingMemberIds);
         return roundingUnit;
+    }
+
+    /**
+     * 这笔支出里原本就有的人：原来的付款人加上原来的分摊者。没有 expenseId 时是空集合。
+     * 看不见的支出（不存在、已删除、别的行程的、别人的个人支出）→ 404，和详情一样不泄露它存在过。
+     */
+    private Set<Long> membersAlreadyIn(ActiveMember me, long tripId, Long expenseId) {
+        if (expenseId == null) {
+            return Set.of();
+        }
+        ExpenseRow row = expenseMapper.findVisible(tripId, expenseId, me.memberId());
+        if (row == null) {
+            throw ApiException.notFound();
+        }
+        Set<Long> memberIds = new HashSet<>();
+        memberIds.add(row.paidByMemberId());
+        expenseMapper.findSplits(row.id()).forEach(split -> memberIds.add(split.memberId()));
+        return memberIds;
     }
 
     /**
      * 按分摊方式算出每个人的分摊。不查成员，只看请求本身。
      */
-    private static List<SplitView> split(ActiveMember me, ExpenseRequest request, int roundingUnit) {
+    private static List<SplitView> split(ActiveMember me, SplitInput request, int roundingUnit) {
         return switch (request.splitMode()) {
             case NONE -> personalSplit(me.memberId(), request);
             case EQUAL -> equalSplits(request, roundingUnit);
@@ -233,7 +358,7 @@ class ExpenseService {
     /**
      * 个人支出：不带 splits，付款人必须是自己，一条分摊 = 总额
      */
-    private static List<SplitView> personalSplit(long currentMemberId, ExpenseRequest request) {
+    private static List<SplitView> personalSplit(long currentMemberId, SplitInput request) {
         if (hasSplits(request)) {
             throw validationFailed("splits", "must be null or empty when splitMode is NONE");
         }
@@ -246,7 +371,7 @@ class ExpenseService {
     /**
      * 平均分：余数一次性给 {@link #remainderHolderId} 选出的那个人，其余人拿整份
      */
-    private static List<SplitView> equalSplits(ExpenseRequest request, int roundingUnit) {
+    private static List<SplitView> equalSplits(SplitInput request, int roundingUnit) {
         List<SplitRequest> members = requireSplits(request);
         long totalMinor = request.amountMinor();
         long remainderMinor = totalMinor % ((long) roundingUnit * members.size());
@@ -274,7 +399,7 @@ class ExpenseService {
     /**
      * 自定义：先逐项校验，再校验之和等于总额，这样错误码不取决于金额的顺序
      */
-    private static List<SplitView> customSplits(ExpenseRequest request, int roundingUnit) {
+    private static List<SplitView> customSplits(SplitInput request, int roundingUnit) {
         List<SplitView> splits = new ArrayList<>();
         for (SplitRequest split : requireSplits(request)) {
             Long amountMinor = split.amountMinor();
@@ -326,9 +451,10 @@ class ExpenseService {
     }
 
     /**
-     * 付款人和所有分摊成员：名单里不能有重复，且都必须是这个行程的在籍成员
+     * 付款人和所有分摊成员：名单里不能有重复，且都必须是这个行程的在籍成员。
+     * existingMemberIds 里的人（这笔支出原本就有的）不查：他们一定是这个行程的成员，已退出也放行。
      */
-    private void requireValidMembers(long tripId, ExpenseRequest request) {
+    private void requireValidMembers(long tripId, SplitInput request, Set<Long> existingMemberIds) {
         List<SplitRequest> splits = request.splits() == null ? List.of() : request.splits();
         requireNoDuplicateMembers(splits);
 
@@ -336,6 +462,7 @@ class ExpenseService {
         List<Long> memberIds = new ArrayList<>();
         memberIds.add(request.paidByMemberId());
         splits.forEach(split -> memberIds.add(split.memberId()));
+        memberIds.removeIf(existingMemberIds::contains);
         memberService.requireActiveMembers(tripId, memberIds);
     }
 
@@ -351,14 +478,14 @@ class ExpenseService {
         }
     }
 
-    private static boolean hasSplits(ExpenseRequest request) {
+    private static boolean hasSplits(SplitInput request) {
         return request.splits() != null && !request.splits().isEmpty();
     }
 
     /**
      * equal 和 custom 必须带 splits
      */
-    private static List<SplitRequest> requireSplits(ExpenseRequest request) {
+    private static List<SplitRequest> requireSplits(SplitInput request) {
         if (!hasSplits(request)) {
             throw validationFailed("splits", "must not be null or empty when splitMode is " + request.splitMode());
         }

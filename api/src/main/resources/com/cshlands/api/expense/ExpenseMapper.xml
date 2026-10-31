@@ -3,6 +3,27 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.cshlands.api.expense.ExpenseMapper">
+    <sql id="rowColumns">
+        id, trip_id, client_uuid, title, amount_minor, currency,
+    paid_by_member_id, created_by_member_id, split_mode, occurred_at, occurred_tz,
+    category, visibility, source, note, version, created_at, updated_at, deleted_at
+    </sql>
+
+
+    <select id="findByClientUuid" resultType="com.cshlands.api.expense.ExpenseRow">
+        SELECT <include refid="rowColumns"/>
+        FROM expense
+        WHERE trip_id = #{tripId} AND client_uuid = #{clientUuid}
+    </select>
+
+    <select id="findVisible" resultType="com.cshlands.api.expense.ExpenseRow">
+        SELECT
+        <include refid="rowColumns"/>
+        FROM expense
+        WHERE id = #{expenseId} AND trip_id = #{tripId} AND deleted_at IS NULL
+        AND (visibility = 'trip' OR created_by_member_id = #{memberId})
+    </select>
+
     <insert id="insertSplits">
         INSERT INTO expense_split(expense_id, trip_id, member_id, amount_minor)
         VALUES
@@ -10,4 +31,33 @@
             (#{split.expenseId}, #{split.tripId}, #{split.memberId}, #{split.amountMinor})
         </foreach>
     </insert>
+
+
+    <select id="list" resultType="com.cshlands.api.expense.ExpenseRow">
+        SELECT
+        <include refid="rowColumns"/>
+        FROM expense
+        WHERE trip_id = #{tripId} AND deleted_at IS NULL
+        AND (visibility = 'trip' OR created_by_member_id = #{currentMemberId})
+        <if test="memberId != null">
+            AND (paid_by_member_id = #{memberId} OR EXISTS
+            (SELECT 1 FROM expense_split s WHERE s.expense_id = expense.id AND s.member_id = #{memberId}))
+        </if>
+        <if test="currency != null">AND currency = #{currency}</if>
+        <if test="category != null">AND category = #{category}</if>
+        <if test="occurredFrom != null">
+            AND occurred_at BETWEEN #{occurredFrom} AND #{occurredTo}
+        </if>
+        ORDER BY occurred_at DESC, id DESC
+    </select>
+
+    <select id="findSplitsByMultipleExpenseIds" resultType="com.cshlands.api.expense.ExpenseSplitRow">
+        SELECT expense_id, member_id, amount_minor
+        FROM expense_split
+        WHERE expense_id IN
+        <foreach collection="expenseIds" item="expenseId" open="(" separator="," close=")">
+            #{expenseId}
+        </foreach>
+        ORDER BY member_id
+    </select>
 </mapper>
