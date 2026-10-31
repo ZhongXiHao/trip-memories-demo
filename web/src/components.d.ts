@@ -15,6 +15,7 @@ declare module 'vue' {
     AppTabBar: typeof import('./components/AppTabBar.vue')['default']
     AppTopBar: typeof import('./components/AppTopBar.vue')['default']
     BoardHeader: typeof import('./components/BoardHeader.vue')['default']
+    CurrencyAmount: typeof import('./components/CurrencyAmount.vue')['default']
     CurrencyTag: typeof import('./components/CurrencyTag.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
