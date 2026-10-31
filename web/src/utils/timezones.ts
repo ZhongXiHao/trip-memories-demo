@@ -31,3 +31,8 @@ export function timezoneLabel(value: string): string {
   const found = TIMEZONE_OPTIONS.find((o) => o.value === value)
   return found ? `${found.label} · ${found.value}` : value
 }
+
+/** 一行摘要里用的短名：已知的只显示中文名（"东京"），不认识的原样显示 */
+export function timezoneShortLabel(value: string): string {
+  return TIMEZONE_OPTIONS.find((o) => o.value === value)?.label ?? value
+}

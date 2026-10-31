@@ -10,13 +10,16 @@ import { listMembers, type MemberView } from '@/api/members'
 import { getTrip, type TripView } from '@/api/trips'
 import BoardHeader from '@/components/BoardHeader.vue'
 import CurrencyAmount from '@/components/CurrencyAmount.vue'
+import MoreMenu from '@/components/MoreMenu.vue'
 import { confirmAction } from '@/utils/dialog'
+import { expenseMenuItems, type ExpenseMenuKey } from '@/utils/menus'
 import { canModifyExpense, categoryLabel, dayLabel, isMemberLeft, memberName, splitModeLabel } from '@/utils/expenses'
 import { timezoneLabel } from '@/utils/timezones'
 import { showError } from '@/utils/toast'
 import { shortLocalDate, toLocalDateTime, weekdayOf } from '@/utils/zonedTime'
 
-// 一笔支出的详情：金额、谁付的、怎么分的。付款人或记账人可以修改、删除（负责人也没有特权）。
+// 一笔支出的详情：金额、谁付的、怎么分的。付款人或记账人可以修改、删除（负责人也没有特权），
+// 这两个操作都在页头的"⋯"菜单里（删除是危险操作，不常驻页面，见 DESIGN.md「按钮」）。
 const props = defineProps<{ tripId: number; expenseId: number }>()
 
 const router = useRouter()
@@ -30,6 +33,7 @@ const expense = ref<ExpenseView | null>(null)
 const busy = ref(false)
 
 const canModify = computed(() => (expense.value && trip.value ? canModifyExpense(expense.value, trip.value.myMemberId) : false))
+const menuItems = computed(() => expenseMenuItems(canModify.value))
 
 const when = computed(() => {
   if (!expense.value) return ''
@@ -85,6 +89,11 @@ function goEdit() {
   router.push({ name: 'expense-edit', params: { tripId: props.tripId, expenseId: props.expenseId } })
 }
 
+function onMenu(key: ExpenseMenuKey) {
+  if (key === 'edit') goEdit()
+  if (key === 'delete') void onDelete()
+}
+
 async function onDelete() {
   if (!expense.value || busy.value) return
   const title = expense.value.title
@@ -116,7 +125,7 @@ async function onDelete() {
   <div>
     <BoardHeader :title="expense?.title ?? '支出'" :subtitle="trip?.name" back-label="返回行程" narrow @back="goTrip">
       <template #action>
-        <van-button v-if="canModify" size="small" plain class="edit" :disabled="busy" @click="goEdit">修改</van-button>
+        <MoreMenu :items="menuItems" label="支出操作" :title="expense?.title" :disabled="busy" @select="onMenu" />
       </template>
     </BoardHeader>
 
@@ -128,12 +137,12 @@ async function onDelete() {
 
       <div v-else-if="state === 'not-found'" class="status status--box" role="alert">
         <p class="status__text">找不到这笔支出：它可能已经被删除，或者你已经不在这个行程里了。</p>
-        <van-button size="small" plain type="primary" @click="goTrip">返回行程</van-button>
+        <van-button size="small" plain type="primary" class="tm-button-secondary" @click="goTrip">返回行程</van-button>
       </div>
 
       <div v-else-if="state === 'error'" class="status status--box" role="alert">
         <p class="status__text">{{ errorMessage }}</p>
-        <van-button size="small" plain type="primary" @click="load">重试</van-button>
+        <van-button size="small" plain type="primary" class="tm-button-secondary" @click="load">重试</van-button>
       </div>
 
       <template v-else-if="expense && trip">
@@ -181,20 +190,13 @@ async function onDelete() {
           </ul>
         </section>
 
-        <div class="actions">
-          <template v-if="canModify">
-            <van-button plain type="danger" block :loading="busy" @click="onDelete">删除这笔支出</van-button>
-          </template>
-          <p v-else class="hint">只有付款人或记账人可以修改、删除这笔支出。</p>
-        </div>
+        <p v-if="!canModify" class="hint">只有付款人或记账人可以修改、删除这笔支出。</p>
       </template>
     </main>
   </div>
 </template>
 
 <style lang="less" scoped>
-@import (reference) '../styles/breakpoints.less';
-
 .expense-detail {
   display: flex;
   flex-direction: column;
@@ -335,25 +337,5 @@ async function onDelete() {
   font-size: var(--tm-text-sm);
 }
 
-// 页头里的"修改"：手机上页头是深色（白字白边）；PC 上页头变成普通标题区，改成主色描边（和行程页的"编辑"一致）
-.edit {
-  min-height: var(--tm-tap-min);
-  padding: 0 var(--tm-space-4);
-  border-color: rgb(255 255 255 / 60%);
-  background: transparent;
-  color: #fff;
-}
 
-@media (min-width: @bp-desktop) {
-  .edit {
-    border-color: var(--tm-primary);
-    color: var(--tm-primary);
-  }
-}
-
-.actions {
-  display: flex;
-  flex-direction: column;
-  gap: var(--tm-space-3);
-}
 </style>
