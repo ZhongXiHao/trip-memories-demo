@@ -81,6 +81,10 @@ function goTrip() {
   router.push({ name: 'trip', params: { tripId: props.tripId } })
 }
 
+function goEdit() {
+  router.push({ name: 'expense-edit', params: { tripId: props.tripId, expenseId: props.expenseId } })
+}
+
 async function onDelete() {
   if (!expense.value || busy.value) return
   const title = expense.value.title
@@ -110,7 +114,11 @@ async function onDelete() {
 
 <template>
   <div>
-    <BoardHeader :title="expense?.title ?? '支出'" :subtitle="trip?.name" back-label="返回行程" narrow @back="goTrip" />
+    <BoardHeader :title="expense?.title ?? '支出'" :subtitle="trip?.name" back-label="返回行程" narrow @back="goTrip">
+      <template #action>
+        <van-button v-if="canModify" size="small" plain class="edit" :disabled="busy" @click="goEdit">修改</van-button>
+      </template>
+    </BoardHeader>
 
     <main class="expense-detail tm-container tm-container--narrow">
       <div v-if="state === 'loading'" class="status" role="status">
@@ -185,6 +193,8 @@ async function onDelete() {
 </template>
 
 <style lang="less" scoped>
+@import (reference) '../styles/breakpoints.less';
+
 .expense-detail {
   display: flex;
   flex-direction: column;
@@ -323,6 +333,22 @@ async function onDelete() {
   margin: 0;
   color: var(--tm-muted);
   font-size: var(--tm-text-sm);
+}
+
+// 页头里的"修改"：手机上页头是深色（白字白边）；PC 上页头变成普通标题区，改成主色描边（和行程页的"编辑"一致）
+.edit {
+  min-height: var(--tm-tap-min);
+  padding: 0 var(--tm-space-4);
+  border-color: rgb(255 255 255 / 60%);
+  background: transparent;
+  color: #fff;
+}
+
+@media (min-width: @bp-desktop) {
+  .edit {
+    border-color: var(--tm-primary);
+    color: var(--tm-primary);
+  }
 }
 
 .actions {
