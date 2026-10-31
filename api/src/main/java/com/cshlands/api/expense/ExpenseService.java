@@ -15,12 +15,15 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.cshlands.api.common.ApiException.validationFailed;
+import static com.cshlands.api.expense.ExpenseTime.calculateDayIndex;
+import static com.cshlands.api.expense.ExpenseTime.parseDate;
+import static com.cshlands.api.expense.ExpenseTime.parseOccurredAt;
+import static com.cshlands.api.expense.ExpenseTime.parseTz;
 
 @Service
 class ExpenseService {
@@ -90,13 +93,6 @@ class ExpenseService {
             }
         }
         throw new IllegalStateException("Expense with clientUuid " + clientUuid + " could not be created or found");
-    }
-
-    private static String parseTz(String occurredTz) {
-        if (!ZoneId.getAvailableZoneIds().contains(occurredTz)) {
-            throw validationFailed("occurredTz", "must be an IANA time zone, e.g. Asia/Tokyo");
-        }
-        return occurredTz;
     }
 
     /**
@@ -209,18 +205,6 @@ class ExpenseService {
         throw ApiException.of(ErrorCode.VERSION_CONFLICT, "Expense with expenseId " + existing.id() + " has been updated by another request. Please refresh and try again.");
     }
 
-    private static LocalDate parseDate(String date) {
-        if (date == null) {
-            return null;
-        }
-        // 日期必须是 yyyy-MM-dd
-        try {
-            return LocalDate.parse(date);
-        } catch (DateTimeParseException e) {
-            throw validationFailed("date", "must be a valid date in the format yyyy-MM-dd");
-        }
-    }
-
     /**
      * 用库里实际生效的值（含默认值）拼出支出对象：分摊从库里取，dayIndex 按这笔自己的时区算
      */
@@ -228,22 +212,6 @@ class ExpenseService {
         List<SplitRow> splits = expenseMapper.findSplits(row.id());
         Long dayIndex = calculateDayIndex(row.occurredAt(), ZoneId.of(row.occurredTz()), tripClock.startDate());
         return ExpenseView.of(row, splits, dayIndex);
-    }
-
-    private static Long calculateDayIndex(Instant occurredAt, ZoneId tz, LocalDate startDate) {
-        if (startDate == null) {
-            return null;
-        }
-        LocalDate occurredDate = occurredAt.atZone(tz).toLocalDate();
-        return ChronoUnit.DAYS.between(startDate, occurredDate) + 1;
-    }
-
-    private static Instant parseOccurredAt(String occurredAt) {
-        try {
-            return Instant.parse(occurredAt);
-        } catch (DateTimeParseException e) {
-            throw validationFailed("occurredAt", "must be a valid ISO-8601 timestamp with timezone, e.g. 2023-03-15T10:00:00Z or 2023-03-15T19:00:00+09:00");
-        }
     }
 
     /**
