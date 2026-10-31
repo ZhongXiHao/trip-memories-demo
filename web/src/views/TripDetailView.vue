@@ -22,6 +22,7 @@ import TripExpenses from '@/components/TripExpenses.vue'
 import TripMembers from '@/components/TripMembers.vue'
 import { formatDateRange } from '@/utils/date'
 import { confirmAction } from '@/utils/dialog'
+import { useIsDesktop } from '@/utils/media'
 import { roleLabel, splitMembers } from '@/utils/members'
 import { tripMenuItems, type TripMenuKey } from '@/utils/menus'
 import { timezoneLabel, timezoneShortLabel } from '@/utils/timezones'
@@ -30,11 +31,13 @@ import { showError } from '@/utils/toast'
 
 // 行程详情：页头是行程摘要（日期、展示币别、时区，负责人有标签），下面是支出、欠款（占位）和成员。
 // 编辑、删除、退出行程都在页头的"⋯"菜单里（危险操作不常驻页面，见 DESIGN.md「按钮」）。
-// 主体分成三个标签：支出 / 欠款 / 成员。当前标签写在地址的 ?tab= 里，刷新、从别的页面返回后还在原来的标签。
+// 手机：主体分成三个标签：支出 / 欠款 / 成员。当前标签写在地址的 ?tab= 里，刷新、从别的页面返回后还在原来的标签。
+// PC（≥ 960px）：不用标签，两栏同时显示（地址里的 ?tab= 不起作用，回到手机宽度时仍然有效）。
 const props = defineProps<{ tripId: number }>()
 
 const router = useRouter()
 const route = useRoute()
+const isDesktop = useIsDesktop()
 
 const activeTab = computed(() => tabFromQuery(route.query.tab))
 const tabsAnchor = ref<HTMLElement>()
@@ -235,6 +238,34 @@ async function onQuit() {
         </div>
       </div>
 
+      <!-- PC：两栏，左边支出（宽），右边欠款占位和成员（窄）。"记一笔"在支出栏顶部 -->
+      <div v-else-if="isDesktop" class="tm-container columns">
+        <TripExpenses :trip-id="tripId" :members="members" :display-currency="trip.displayCurrency">
+          <template #action>
+            <van-button type="primary" icon="plus" class="add-expense" :disabled="busy" @click="goNewExpense">
+              记一笔
+            </van-button>
+          </template>
+        </TripExpenses>
+        <aside class="side">
+          <section aria-labelledby="debts-title">
+            <h2 id="debts-title" class="side__title">欠款</h2>
+            <p class="soon">欠款和还款马上就做。</p>
+          </section>
+          <TripMembers
+            :active="groups.active"
+            :left="groups.left"
+            :my-member-id="trip.myMemberId"
+            :is-owner="isOwner"
+            :busy="busy"
+            @add="showAdd = true"
+            @transfer="onTransfer"
+            @remove="onRemove"
+          />
+        </aside>
+      </div>
+
+      <!-- 手机：三个标签 + 支出标签底部固定的"记一笔" -->
       <template v-else>
         <!-- 标签条吸顶前所在的位置：切换标签时如果已经滚过它，就回到这里，让新标签从开头显示 -->
         <div ref="tabsAnchor" aria-hidden="true" />
@@ -250,19 +281,17 @@ async function onQuit() {
 
               <p v-else-if="tab.name === 'debts'" class="soon">欠款和还款马上就做。</p>
 
-              <div v-else class="members">
-                <TripMembers
-                  :active="groups.active"
-                  :left="groups.left"
-                  :my-member-id="trip.myMemberId"
-                  :is-owner="isOwner"
-                  :busy="busy"
-                  @add="showAdd = true"
-                  @transfer="onTransfer"
-                  @remove="onRemove"
-                />
-                <p v-if="isOwner" class="members__note">你是负责人。想退出，要先把负责人转让给别的成员。</p>
-              </div>
+              <TripMembers
+                v-else
+                :active="groups.active"
+                :left="groups.left"
+                :my-member-id="trip.myMemberId"
+                :is-owner="isOwner"
+                :busy="busy"
+                @add="showAdd = true"
+                @transfer="onTransfer"
+                @remove="onRemove"
+              />
             </div>
           </van-tab>
         </van-tabs>
@@ -279,8 +308,6 @@ async function onQuit() {
 </template>
 
 <style lang="less" scoped>
-@import (reference) '../styles/breakpoints.less';
-
 .detail__state {
   padding-block: var(--tm-space-4);
 }
@@ -306,16 +333,6 @@ async function onQuit() {
   }
 }
 
-@media (min-width: @bp-desktop) {
-  .tabs {
-    --expense-sticky-top: calc(var(--tm-topbar-h) + var(--tm-tabs-h));
-
-    :deep(.van-tabs__wrap) {
-      top: var(--tm-topbar-h);
-    }
-  }
-}
-
 // 固定在底部的"记一笔"：和手机版式的单栏一样宽（最宽 480px 居中），底部让出 iPhone 的安全区
 .action-bar {
   position: fixed;
@@ -329,6 +346,34 @@ async function onQuit() {
   border-top: 1px solid var(--tm-line);
   background: var(--tm-surface);
   transform: translateX(-50%);
+}
+
+// PC 两栏：支出（宽）+ 欠款和成员（窄）
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  align-items: start;
+  gap: var(--tm-space-5);
+  padding-block: var(--tm-space-4) var(--tm-space-6);
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tm-space-5);
+}
+
+.side__title {
+  display: flex;
+  align-items: center;
+  min-height: var(--tm-tap-min);
+  margin: 0 0 var(--tm-space-2);
+  font-size: var(--tm-text-md);
+  font-weight: 600;
+}
+
+.add-expense {
+  padding: 0 var(--tm-space-5);
 }
 
 .panel {
@@ -362,18 +407,6 @@ async function onQuit() {
 
 .status__text {
   margin: 0;
-}
-
-.members {
-  display: flex;
-  flex-direction: column;
-  gap: var(--tm-space-3);
-}
-
-.members__note {
-  margin: 0;
-  color: var(--tm-muted);
-  font-size: var(--tm-text-xs);
 }
 
 // 页头摘要：日期 · 币别 · 时区（· 负责人标签），描述最多两行

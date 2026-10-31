@@ -81,6 +81,8 @@ function manageable(member: MemberView): boolean {
       </li>
     </ul>
 
+    <p v-if="isOwner" class="note">你是负责人。想退出，要先把负责人转让给别的成员。</p>
+
     <details v-if="left.length" class="left">
       <summary class="left__summary">已退出的成员（{{ left.length }}）</summary>
       <ul class="list list--left">
@@ -206,6 +208,12 @@ function manageable(member: MemberView): boolean {
   border-color: var(--tm-navy);
   color: var(--tm-navy);
   font-weight: 600;
+}
+
+.note {
+  margin: var(--tm-space-3) 0 0;
+  color: var(--tm-muted);
+  font-size: var(--tm-text-xs);
 }
 
 .left {
