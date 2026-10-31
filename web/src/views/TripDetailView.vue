@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import 'vant/es/toast/style'
 
@@ -25,13 +25,29 @@ import { confirmAction } from '@/utils/dialog'
 import { roleLabel, splitMembers } from '@/utils/members'
 import { tripMenuItems, type TripMenuKey } from '@/utils/menus'
 import { timezoneLabel, timezoneShortLabel } from '@/utils/timezones'
+import { TRIP_TABS, queryWithTab, tabFromQuery, type TripTab } from '@/utils/tripTabs'
 import { showError } from '@/utils/toast'
 
 // 行程详情：页头是行程摘要（日期、展示币别、时区，负责人有标签），下面是支出、欠款（占位）和成员。
 // 编辑、删除、退出行程都在页头的"⋯"菜单里（危险操作不常驻页面，见 DESIGN.md「按钮」）。
+// 主体分成三个标签：支出 / 欠款 / 成员。当前标签写在地址的 ?tab= 里，刷新、从别的页面返回后还在原来的标签。
 const props = defineProps<{ tripId: number }>()
 
 const router = useRouter()
+const route = useRoute()
+
+const activeTab = computed(() => tabFromQuery(route.query.tab))
+const tabsAnchor = ref<HTMLElement>()
+
+/** 切换标签：用 replace 改地址（不在浏览历史里堆一串标签切换），已经滚过标签条时回到新标签的开头 */
+function setTab(tab: TripTab) {
+  if (tab === activeTab.value) return
+  void router.replace({ query: queryWithTab(route.query, tab) })
+  const anchor = tabsAnchor.value
+  if (!anchor) return
+  const top = anchor.getBoundingClientRect().top + window.scrollY
+  if (window.scrollY > top) window.scrollTo({ top })
+}
 
 type State = 'loading' | 'ready' | 'not-found' | 'error'
 const state = ref<State>('loading')
@@ -201,45 +217,62 @@ async function onQuit() {
       </template>
     </BoardHeader>
 
-    <main class="detail tm-container">
-      <div v-if="state === 'loading'" class="status" role="status">
-        <van-loading size="20" />
-        <span>正在加载…</span>
-      </div>
+    <main class="detail">
+      <div v-if="state !== 'ready' || !trip" class="tm-container detail__state">
+        <div v-if="state === 'loading'" class="status" role="status">
+          <van-loading size="20" />
+          <span>正在加载…</span>
+        </div>
 
-      <div v-else-if="state === 'not-found'" class="status status--box" role="alert">
-        <p class="status__text">找不到这个行程，或者你已经不在这个行程里了。</p>
-        <van-button size="small" plain type="primary" class="tm-button-secondary" @click="goList">回到我的行程</van-button>
-      </div>
+        <div v-else-if="state === 'not-found'" class="status status--box" role="alert">
+          <p class="status__text">找不到这个行程，或者你已经不在这个行程里了。</p>
+          <van-button size="small" plain type="primary" class="tm-button-secondary" @click="goList">回到我的行程</van-button>
+        </div>
 
-      <div v-else-if="state === 'error'" class="status status--box" role="alert">
-        <p class="status__text">{{ errorMessage }}</p>
-        <van-button size="small" plain type="primary" class="tm-button-secondary" @click="load()">重试</van-button>
-      </div>
-
-      <div v-else-if="trip" class="main">
-        <TripExpenses :trip-id="tripId" :members="members" :display-currency="trip.displayCurrency">
-          <template #action>
-            <van-button type="primary" size="small" icon="plus" class="add-expense" :disabled="busy" @click="goNewExpense">
-              记一笔
-            </van-button>
-          </template>
-        </TripExpenses>
-        <p class="soon">欠款和还款马上就做。</p>
-        <div class="members">
-          <TripMembers
-            :active="groups.active"
-            :left="groups.left"
-            :my-member-id="trip.myMemberId"
-            :is-owner="isOwner"
-            :busy="busy"
-            @add="showAdd = true"
-            @transfer="onTransfer"
-            @remove="onRemove"
-          />
-          <p v-if="isOwner" class="members__note">你是负责人。想退出，要先把负责人转让给别的成员。</p>
+        <div v-else-if="state === 'error'" class="status status--box" role="alert">
+          <p class="status__text">{{ errorMessage }}</p>
+          <van-button size="small" plain type="primary" class="tm-button-secondary" @click="load()">重试</van-button>
         </div>
       </div>
+
+      <template v-else>
+        <!-- 标签条吸顶前所在的位置：切换标签时如果已经滚过它，就回到这里，让新标签从开头显示 -->
+        <div ref="tabsAnchor" aria-hidden="true" />
+        <van-tabs :active="activeTab" swipeable class="tabs" @update:active="setTab">
+          <van-tab v-for="tab in TRIP_TABS" :key="tab.name" :name="tab.name" :title="tab.title">
+            <div class="tm-container panel">
+              <TripExpenses
+                v-if="tab.name === 'expenses'"
+                :trip-id="tripId"
+                :members="members"
+                :display-currency="trip.displayCurrency"
+              >
+                <template #action>
+                  <van-button type="primary" size="small" icon="plus" class="add-expense" :disabled="busy" @click="goNewExpense">
+                    记一笔
+                  </van-button>
+                </template>
+              </TripExpenses>
+
+              <p v-else-if="tab.name === 'debts'" class="soon">欠款和还款马上就做。</p>
+
+              <div v-else class="members">
+                <TripMembers
+                  :active="groups.active"
+                  :left="groups.left"
+                  :my-member-id="trip.myMemberId"
+                  :is-owner="isOwner"
+                  :busy="busy"
+                  @add="showAdd = true"
+                  @transfer="onTransfer"
+                  @remove="onRemove"
+                />
+                <p v-if="isOwner" class="members__note">你是负责人。想退出，要先把负责人转让给别的成员。</p>
+              </div>
+            </div>
+          </van-tab>
+        </van-tabs>
+      </template>
     </main>
 
     <AddMemberPopup v-model:show="showAdd" :trip-id="tripId" @added="load(true)" />
@@ -249,7 +282,44 @@ async function onQuit() {
 <style lang="less" scoped>
 @import (reference) '../styles/breakpoints.less';
 
-.detail {
+.detail__state {
+  padding-block: var(--tm-space-4);
+}
+
+// 标签条吸顶：手机上页头会滚走，贴在视口顶部。用 CSS sticky（不用 Vant 的 sticky 属性，不需要监听滚动）。
+// 支出列表的日期标题也吸顶，要贴在标签条下面：通过 --expense-sticky-top 告诉 TripExpenses 让出标签条的高度。
+.tabs {
+  --expense-sticky-top: var(--tm-tabs-h);
+
+  :deep(.van-tabs__wrap) {
+    position: sticky;
+    top: 0;
+    // 高于列表里吸顶的日期标题（1），低于 PC 的顶部导航条（10）
+    z-index: 2;
+    border-bottom: 1px solid var(--tm-line);
+  }
+
+  // 左右滑动切换用的容器默认是 overflow: hidden，会让里面的 position: sticky（日期标题）失效。
+  // 改成 clip：同样把左右两边的标签内容裁掉，但不形成滚动容器，sticky 仍然相对于页面生效。
+  :deep(.van-tabs__content--animated),
+  :deep(.van-swipe) {
+    overflow: clip;
+  }
+}
+
+@media (min-width: @bp-desktop) {
+  .tabs {
+    --expense-sticky-top: calc(var(--tm-topbar-h) + var(--tm-tabs-h));
+
+    :deep(.van-tabs__wrap) {
+      top: var(--tm-topbar-h);
+    }
+  }
+}
+
+.panel {
+  // 至少一屏高：内容短的标签（欠款、成员）下面的空白处也能左右滑动切换
+  min-height: calc(100dvh - var(--tm-tabs-h));
   padding-block: var(--tm-space-4) calc(var(--tm-space-6) + env(safe-area-inset-bottom));
 }
 
@@ -273,14 +343,6 @@ async function onQuit() {
 
 .status__text {
   margin: 0;
-}
-
-.main {
-  display: flex;
-  flex-direction: column;
-  gap: var(--tm-space-5);
-  // 列宽不跟着内容撑开：长的支出名称在行内省略，不会把页面撑出横向滚动
-  min-width: 0;
 }
 
 .members {

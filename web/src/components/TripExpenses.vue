@@ -182,10 +182,11 @@ defineExpose({ reload: load })
 }
 
 // 日期标题吸顶：手机上页头会滚走，贴在视口顶部；PC 上顶部导航条是 sticky 的，贴在它下面。
+// 外面还有别的吸顶条（比如行程页的标签条）时，由外层设 --expense-sticky-top 让出它的高度。
 // 只在本组范围内吸住（sticky 的范围是父元素 .day），滚到下一组时被下一组的标题顶上去。
 .day__head {
   position: sticky;
-  top: 0;
+  top: var(--expense-sticky-top, 0);
   // 低于顶部导航条（AppTopBar 是 10），高于列表内容
   z-index: 1;
   display: flex;
@@ -202,7 +203,7 @@ defineExpose({ reload: load })
 
 @media (min-width: @bp-desktop) {
   .day__head {
-    top: var(--tm-topbar-h);
+    top: var(--expense-sticky-top, var(--tm-topbar-h));
   }
 }
 
