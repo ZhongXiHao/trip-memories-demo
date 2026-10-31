@@ -73,6 +73,10 @@ function goList() {
   router.push({ name: 'home' })
 }
 
+function goNewExpense() {
+  router.push({ name: 'expense-new', params: { tripId: props.tripId } })
+}
+
 function goEdit() {
   router.push({ name: 'trip-edit', params: { tripId: props.tripId } })
 }
@@ -225,7 +229,13 @@ async function onQuit() {
         </div>
 
         <div class="main">
-          <TripExpenses :trip-id="tripId" :members="members" />
+          <TripExpenses :trip-id="tripId" :members="members">
+            <template #action>
+              <van-button type="primary" size="small" icon="plus" class="add-expense" :disabled="busy" @click="goNewExpense">
+                记一笔
+              </van-button>
+            </template>
+          </TripExpenses>
           <p class="soon">欠款和还款马上就做。</p>
           <TripMembers
             :active="groups.active"
@@ -375,6 +385,11 @@ async function onQuit() {
     border-color: var(--tm-primary);
     color: var(--tm-primary);
   }
+}
+
+.add-expense {
+  min-height: var(--tm-tap-min);
+  padding: 0 var(--tm-space-4);
 }
 
 .soon {

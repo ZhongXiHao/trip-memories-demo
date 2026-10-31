@@ -51,6 +51,12 @@ const router = createRouter({
       props: (route) => ({ tripId: Number(route.params.tripId) }),
     },
     {
+      path: '/trips/:tripId(\\d+)/expenses/new',
+      name: 'expense-new',
+      component: () => import('@/views/ExpenseCreateView.vue'),
+      props: (route) => ({ tripId: Number(route.params.tripId) }),
+    },
+    {
       path: '/trips/:tripId(\\d+)/expenses/:expenseId(\\d+)',
       name: 'expense',
       component: () => import('@/views/ExpenseDetailView.vue'),
