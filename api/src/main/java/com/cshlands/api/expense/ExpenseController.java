@@ -48,11 +48,16 @@ class ExpenseController {
     @GetMapping
     PageResult<ExpenseView> list(
             @PathVariable long tripId,
-            @RequestParam(required = false) String  date,
+            @RequestParam(required = false) String date,
             @RequestParam(name = "memberId", required = false) Long queryMemberId,
             @RequestParam(required = false) String currency,
             @RequestParam(required = false) ExpenseCategory category
     ) {
         return expenseService.list(CurrentUser.id(), tripId, date, queryMemberId, currency, category);
+    }
+
+    @PutMapping("/{expenseId}")
+    ExpenseView update(@PathVariable long tripId, @PathVariable long expenseId, @Valid @RequestBody UpdateExpenseRequest request) {
+        return expenseService.update(CurrentUser.id(), tripId, expenseId, request);
     }
 }

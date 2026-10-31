@@ -40,4 +40,12 @@ interface ExpenseMapper {
     List<ExpenseRow> list(ExpenseQuery query);
 
     List<ExpenseSplitRow> findSplitsByMultipleExpenseIds(@Param("expenseIds") List<Long> expenseIds);
+
+    @Update("UPDATE expense SET title = #{title}, amount_minor = #{amountMinor}, currency = #{currency}, paid_by_member_id = #{paidByMemberId}, split_mode = #{splitMode}, occurred_at = #{occurredAt}, occurred_tz = #{occurredTz}, category = #{category}, note = #{note}, version = version + 1 " +
+            "WHERE id = #{expenseId} AND trip_id = #{tripId} AND version = #{version} AND deleted_at IS NULL " +
+            "AND (paid_by_member_id = #{editorMemberId} OR created_by_member_id = #{editorMemberId})")
+    int update(UpdateExpense updateExpense);
+
+    @Delete("DELETE FROM expense_split WHERE trip_id = #{tripId} AND expense_id = #{expenseId}")
+    int deleteSplits(@Param("tripId") long tripId, @Param("expenseId") long expenseId);
 }

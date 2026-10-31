@@ -29,13 +29,15 @@ class ExpenseService {
     private final ExpenseMapper expenseMapper;
     private final ExpenseWriter expenseWriter;
     private final TripService tripService;
+    private final ExpenseUpdater expenseUpdater;
 
-    ExpenseService(CurrencyMapper currencyMapper, MemberService memberService, ExpenseMapper expenseMapper, ExpenseWriter expenseWriter, TripService tripService) {
+    ExpenseService(CurrencyMapper currencyMapper, MemberService memberService, ExpenseMapper expenseMapper, ExpenseWriter expenseWriter, TripService tripService, ExpenseUpdater expenseUpdater) {
         this.currencyMapper = currencyMapper;
         this.memberService = memberService;
         this.expenseMapper = expenseMapper;
         this.expenseWriter = expenseWriter;
         this.tripService = tripService;
+        this.expenseUpdater = expenseUpdater;
     }
 
     /**
@@ -79,9 +81,8 @@ class ExpenseService {
             }
 
             // 校验是否为合法 IANA
-            String occurredTz = request.occurredTz();
-            if (occurredTz != null && !ZoneId.getAvailableZoneIds().contains(occurredTz)) {
-                throw validationFailed("occurredTz", "must be an IANA time zone, e.g. Asia/Tokyo");
+            if (request.occurredTz() != null) {
+                parseTz(request.occurredTz());
             }
 
             if (expenseWriter.write(tripId, me.memberId(), tripClock, request, splits)) {
@@ -89,6 +90,13 @@ class ExpenseService {
             }
         }
         throw new IllegalStateException("Expense with clientUuid " + clientUuid + " could not be created or found");
+    }
+
+    private static String parseTz(String occurredTz) {
+        if (!ZoneId.getAvailableZoneIds().contains(occurredTz)) {
+            throw validationFailed("occurredTz", "must be an IANA time zone, e.g. Asia/Tokyo");
+        }
+        return occurredTz;
     }
 
     /**
@@ -154,6 +162,51 @@ class ExpenseService {
         }).toList();
 
         return new PageResult<>(expenseViews);
+    }
+
+    ExpenseView update(long userId, long tripId, long expenseId, UpdateExpenseRequest request) {
+        ActiveMember me = memberService.requireActiveMember(userId, tripId);
+        ExpenseRow existing = expenseMapper.findVisible(tripId, expenseId, me.memberId());
+        if (existing == null) {
+            throw ApiException.notFound();
+        }
+        // 校验是提交更新的成员是否可以更新该支出：付款人或记账人可以更新，其他人不行
+        if (me.memberId() != existing.createdByMemberId() && me.memberId() != existing.paidByMemberId()) {
+            throw ApiException.forbidden("Only the payer or the creator can update this expense");
+        }
+
+        // 不能在个人和共同支出之间切换
+        if ((existing.splitMode() == SplitMode.NONE) != (request.splitMode() == SplitMode.NONE)) {
+            throw validationFailed("splitMode", "Cannot switch between a personal expense and a trip expense");
+        }
+
+        // 获取该 expense 的分摊成员列表
+        Set<Long> existingMemberIds = expenseMapper.findSplits(existing.id()).stream().map(SplitRow::memberId).collect(Collectors.toSet());
+        existingMemberIds.add(existing.paidByMemberId()); // 有可能付款人不在分摊列表里，所以也要加上付款人
+        // 校验 currency、amountMinor，以及成员（数据库里已有的成员不会被校验，新增的则会）
+        int roundUnit = validate(tripId, request, existingMemberIds);
+
+        Instant occurredAt = request.occurredAt() == null ? existing.occurredAt() : parseOccurredAt(request.occurredAt());
+        String occurredTz = request.occurredTz() == null ? existing.occurredTz() : parseTz(request.occurredTz());
+
+        List<NewSplit> newSplits = split(me, request, roundUnit).stream().map(splitView -> new NewSplit(tripId, expenseId, splitView.memberId(), splitView.amountMinor())).collect(Collectors.toList());
+
+        UpdateExpense updateExpense = UpdateExpense.fromRequest(tripId, expenseId, me.memberId(), request, occurredAt, occurredTz);
+
+        boolean updated = expenseUpdater.update(updateExpense, newSplits);
+
+        ExpenseRow expenseAfterUpdated = expenseMapper.findVisible(tripId, expenseId, me.memberId());
+
+        if(expenseAfterUpdated == null) {
+            // 说明更新后该支出被删除了
+            throw ApiException.notFound();
+        }
+
+        if (updated) {
+            return toView(expenseAfterUpdated, tripService.getTripClock(userId, tripId));
+        }
+
+        throw ApiException.of(ErrorCode.VERSION_CONFLICT, "Expense with expenseId " + existing.id() + " has been updated by another request. Please refresh and try again.");
     }
 
     private static LocalDate parseDate(String date) {
