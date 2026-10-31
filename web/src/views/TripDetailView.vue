@@ -229,7 +229,7 @@ async function onQuit() {
         </div>
 
         <div class="main">
-          <TripExpenses :trip-id="tripId" :members="members">
+          <TripExpenses :trip-id="tripId" :members="members" :display-currency="trip.displayCurrency">
             <template #action>
               <van-button type="primary" size="small" icon="plus" class="add-expense" :disabled="busy" @click="goNewExpense">
                 记一笔

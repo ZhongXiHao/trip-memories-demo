@@ -108,22 +108,37 @@ describe('labels and people', () => {
 })
 
 describe('totalsByCurrency', () => {
-  it('adds up each currency separately, without converting, in order of first appearance', () => {
-    const list = [
-      { ...expense(4, '2026-10-03T12:00:00Z'), currency: 'KRW', amountMinor: 3000000 },
-      { ...expense(3, '2026-10-03T11:00:00Z'), currency: 'JPY', amountMinor: 120000 },
-      { ...expense(2, '2026-10-03T10:00:00Z'), currency: 'KRW', amountMinor: 2000000 },
-      { ...expense(1, '2026-10-03T09:00:00Z'), currency: 'HKD', amountMinor: 1250 },
-    ]
+  const list = [
+    { ...expense(4, '2026-10-03T12:00:00Z'), currency: 'KRW', amountMinor: 3000000 },
+    { ...expense(3, '2026-10-03T11:00:00Z'), currency: 'JPY', amountMinor: 120000 },
+    { ...expense(2, '2026-10-03T10:00:00Z'), currency: 'KRW', amountMinor: 2000000 },
+    { ...expense(1, '2026-10-03T09:00:00Z'), currency: 'HKD', amountMinor: 1250 },
+  ]
 
-    expect(totalsByCurrency(list)).toEqual([
-      { currency: 'KRW', amountMinor: 5000000 },
-      { currency: 'JPY', amountMinor: 120000 },
+  it('adds up each currency separately, without converting', () => {
+    expect(totalsByCurrency(list, 'HKD')).toEqual([
       { currency: 'HKD', amountMinor: 1250 },
+      { currency: 'JPY', amountMinor: 120000 },
+      { currency: 'KRW', amountMinor: 5000000 },
     ])
   })
 
+  it('puts the display currency first and sorts the rest by code', () => {
+    expect(totalsByCurrency(list, 'KRW').map((t) => t.currency)).toEqual(['KRW', 'HKD', 'JPY'])
+  })
+
+  it('keeps the same order whatever order the expenses come in', () => {
+    const orders = [list, [...list].reverse(), [list[2]!, list[0]!, list[3]!, list[1]!]]
+    const seen = orders.map((items) => totalsByCurrency(items, 'JPY').map((t) => t.currency).join(','))
+    expect(new Set(seen)).toEqual(new Set(['JPY,HKD,KRW']))
+  })
+
+  it('sorts by code alone when the display currency is not spent that day or not given', () => {
+    expect(totalsByCurrency(list, 'CNY').map((t) => t.currency)).toEqual(['HKD', 'JPY', 'KRW'])
+    expect(totalsByCurrency(list).map((t) => t.currency)).toEqual(['HKD', 'JPY', 'KRW'])
+  })
+
   it('is empty for no expenses', () => {
-    expect(totalsByCurrency([])).toEqual([])
+    expect(totalsByCurrency([], 'HKD')).toEqual([])
   })
 })

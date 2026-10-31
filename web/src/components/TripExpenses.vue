@@ -9,12 +9,14 @@ import { categoryLabel, dayLabel, groupByLocalDate, memberName, totalsByCurrency
 import { shortLocalDate, toLocalDateTime, weekdayOf } from '@/utils/zonedTime'
 
 // 行程页里的支出列表：按当地日期分组（每笔按自己的 occurredTz），后端已按时间倒序。
-// 每组的标题滚动时吸顶，右边是当天按币别分开的合计（不换算）。
+// 每组的标题滚动时吸顶，右边是当天按币别分开的合计（不换算；展示币别排第一，其余按代码字母序）。
 // 列表自己取数据、自己处理加载失败，不拖累页面上的其它部分。
 const props = defineProps<{
   tripId: number
   /** 成员列表（包含已退出的），用来把 memberId 显示成昵称 */
   members: MemberView[]
+  /** 行程的展示币别：当天合计里排第一 */
+  displayCurrency?: string
 }>()
 
 type State = 'loading' | 'ready' | 'error'
@@ -23,7 +25,7 @@ const errorMessage = ref('')
 const expenses = ref<ExpenseView[]>([])
 
 const groups = computed(() =>
-  groupByLocalDate(expenses.value).map((group) => ({ ...group, totals: totalsByCurrency(group.items) })),
+  groupByLocalDate(expenses.value).map((group) => ({ ...group, totals: totalsByCurrency(group.items, props.displayCurrency) })),
 )
 
 async function load() {
