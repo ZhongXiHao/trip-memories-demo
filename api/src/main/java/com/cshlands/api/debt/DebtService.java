@@ -4,6 +4,7 @@ import com.cshlands.api.member.MemberService;
 import com.cshlands.api.repayment.RepaymentService;
 import com.cshlands.api.repayment.RepaymentSum;
 import com.cshlands.api.repayment.RepaymentSums;
+import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,16 +27,86 @@ class DebtService {
                     .thenComparingLong(DebtView::toMemberId)
                     .thenComparing(DebtView::currency);
 
+    // 按金额降序，按 member id 升序
+    private static final Comparator<SimplifiedRemainder> BY_AMOUNT_MEMBER_ID =
+            Comparator.comparingLong(SimplifiedRemainder::amount).reversed()
+                    .thenComparingLong(SimplifiedRemainder::memberId);
+
+
     @Transactional(readOnly = true)
-    List<DebtView> overview(long userId, long tripId, Long memberId) {
+    List<DebtView> overview(long userId, long tripId, Long memberId, Boolean simplify) {
+
         memberService.requireActiveMember(userId, tripId);
 
         List<DebtRow> debtRows = debtMapper.getDebts(tripId);
         RepaymentSums repaymentSums = repaymentService.sumsByStatus(tripId);
         // 每对人，每个币种最多返回一个方向，且该方向的金额为正数，表示 fromMemberId 欠 toMemberId 的金额
-        List<DebtView> debtViews = calculateNetAmountMinor(debtRows, repaymentSums);
-        debtViews.sort(BY_FROM_TO_CURRENCY);
-        return debtViews.stream().filter(debtView -> memberId == null || debtView.fromMemberId() == memberId || debtView.toMemberId() == memberId).toList();
+        List<DebtView> debts = calculateNetAmountMinor(debtRows, repaymentSums);
+
+        if (Boolean.TRUE.equals(simplify)) {
+            debts = simplify(debts);
+        }
+        debts.sort(BY_FROM_TO_CURRENCY);
+
+        return involving(memberId, debts);
+    }
+
+    private static @NonNull List<DebtView> involving(Long memberId, List<DebtView> debts) {
+        return debts.stream().filter(debtView -> memberId == null || debtView.fromMemberId() == memberId || debtView.toMemberId() == memberId).toList();
+    }
+
+
+    private static List<DebtView> simplify(List<DebtView> debtViews) {
+        // 给出一组「建议转账」：A 欠 B、B 欠 C 合并成 A 欠 C
+        Map<SimplifiedKey, Long> debtsRemainder = new HashMap<>();
+        debtViews.forEach(debtView -> {
+            long fromMemberId = debtView.fromMemberId();
+            long toMemberId = debtView.toMemberId();
+            long amountMinor = debtView.amountMinor();
+            String currency = debtView.currency();
+            // 欠别人的
+            debtsRemainder.merge(new SimplifiedKey(fromMemberId, currency), amountMinor, Long::sum);
+            // 别人欠自己的
+            debtsRemainder.merge(new SimplifiedKey(toMemberId, currency), -amountMinor, Long::sum);
+        });
+
+        // 遍历一次，按币别把余额分到债务人和债权人两组队列里（用最大优先队列：金额降序，金额相同 memberId 小的在前）
+        Map<String, PriorityQueue<SimplifiedRemainder>> debtorsByCurrency = new HashMap<>();
+        Map<String, PriorityQueue<SimplifiedRemainder>> creditorsByCurrency = new HashMap<>();
+        debtsRemainder.forEach((key, remainder) -> {
+            if (remainder > 0) {
+                debtorsByCurrency.computeIfAbsent(key.currency(), currency -> new PriorityQueue<>(BY_AMOUNT_MEMBER_ID))
+                        .add(new SimplifiedRemainder(key.memberId(), remainder));
+            } else if (remainder < 0) {
+                creditorsByCurrency.computeIfAbsent(key.currency(), currency -> new PriorityQueue<>(BY_AMOUNT_MEMBER_ID))
+                        .add(new SimplifiedRemainder(key.memberId(), -remainder));
+            }
+        });
+
+        // 同一币别里债务人的余额之和等于债权人的，所以有债务人就一定有债权人
+        List<DebtView> simplified = new ArrayList<>();
+        debtorsByCurrency.forEach((currency, debtors) ->
+                simplified.addAll(settle(currency, debtors, creditorsByCurrency.get(currency))));
+        return simplified;
+    }
+
+    // 优先让金额最大的债务人还给金额最大的债权人，直到有一边清空
+    private static List<DebtView> settle(String currency, PriorityQueue<SimplifiedRemainder> debtors,
+                                         PriorityQueue<SimplifiedRemainder> creditors) {
+        List<DebtView> settled = new ArrayList<>();
+        while (!debtors.isEmpty() && !creditors.isEmpty()) {
+            SimplifiedRemainder debtor = debtors.poll();
+            SimplifiedRemainder creditor = creditors.poll();
+            long amount = Math.min(debtor.amount(), creditor.amount());
+            settled.add(new DebtView(debtor.memberId(), creditor.memberId(), currency, amount, 0));
+            if (debtor.amount() > amount) {
+                debtors.add(new SimplifiedRemainder(debtor.memberId(), debtor.amount() - amount));
+            }
+            if (creditor.amount() > amount) {
+                creditors.add(new SimplifiedRemainder(creditor.memberId(), creditor.amount() - amount));
+            }
+        }
+        return settled;
     }
 
     private static List<DebtView> calculateNetAmountMinor(List<DebtRow> debtRows, RepaymentSums repaymentSums) {

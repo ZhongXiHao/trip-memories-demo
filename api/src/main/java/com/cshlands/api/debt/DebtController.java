@@ -20,8 +20,9 @@ class DebtController {
     @GetMapping
     PageResult<DebtView> overview(
             @PathVariable long tripId,
-            @RequestParam(name = "memberId", required = false) Long memberId
+            @RequestParam(name = "memberId", required = false) Long memberId,
+            @RequestParam(name = "simplify", required = false) Boolean simplify
     ) {
-        return new PageResult<>(debtService.overview(CurrentUser.id(), tripId, memberId));
+        return new PageResult<>(debtService.overview(CurrentUser.id(), tripId, memberId, simplify));
     }
 }
