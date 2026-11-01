@@ -25,4 +25,9 @@ class DebtController {
     ) {
         return new PageResult<>(debtService.overview(CurrentUser.id(), tripId, memberId, simplify));
     }
+
+    @GetMapping("/{memberId}")
+    PageResult<DebtView> pair(@PathVariable long tripId, @PathVariable long memberId) {
+        return new PageResult<>(debtService.pair(CurrentUser.id(), tripId, memberId));
+    }
 }

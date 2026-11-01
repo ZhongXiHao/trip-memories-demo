@@ -47,6 +47,16 @@ public class MemberService {
     }
 
     /**
+     * 路径里的 memberId 必须属于这个 Trip（已退出的也算）；不属于 → 404。
+     * 调用者自己先过 {@link #requireActiveMember}，Trip 不存在或已删除时那一步已经是 404。
+     */
+    public void requireMemberOfTrip(long tripId, long memberId) {
+        if (memberMapper.findById(memberId, tripId) == null) {
+            throw ApiException.notFound();
+        }
+    }
+
+    /**
      * 请求里引用的 memberId（付款人、分摊者等）都必须是这个 Trip 的在籍成员。按传入顺序检查，抛出遇到的第一个问题：
      * 不属于这个 Trip → 400 MEMBER_NOT_IN_TRIP，已退出 → 400 MEMBER_LEFT。
      * 不检查调用者自己，那一步先过 {@link #requireActiveMember}。

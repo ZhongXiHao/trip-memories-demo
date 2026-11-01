@@ -1,5 +1,6 @@
 package com.cshlands.api.debt;
 
+import com.cshlands.api.common.ApiException;
 import com.cshlands.api.member.MemberService;
 import com.cshlands.api.repayment.RepaymentService;
 import com.cshlands.api.repayment.RepaymentSum;
@@ -38,10 +39,7 @@ class DebtService {
 
         memberService.requireActiveMember(userId, tripId);
 
-        List<DebtRow> debtRows = debtMapper.getDebts(tripId);
-        RepaymentSums repaymentSums = repaymentService.sumsByStatus(tripId);
-        // 每对人，每个币种最多返回一个方向，且该方向的金额为正数，表示 fromMemberId 欠 toMemberId 的金额
-        List<DebtView> debts = calculateNetAmountMinor(debtRows, repaymentSums);
+        List<DebtView> debts = netDebts(tripId);
 
         if (Boolean.TRUE.equals(simplify)) {
             debts = simplify(debts);
@@ -49,6 +47,34 @@ class DebtService {
         debts.sort(BY_FROM_TO_CURRENCY);
 
         return involving(memberId, debts);
+    }
+
+    /**
+     * 当前用户和 memberId 之间的欠款，按币别分列。不支持化简：化简是整个行程的计算，限制到两个人之间会误导。
+     */
+    @Transactional(readOnly = true)
+    List<DebtView> pair(long userId, long tripId, long memberId) {
+        long myMemberId = memberService.requireActiveMember(userId, tripId).memberId();
+        if (memberId == myMemberId) {
+            throw ApiException.validationFailed("memberId", "must be a member other than yourself");
+        }
+        memberService.requireMemberOfTrip(tripId, memberId);
+
+        List<DebtView> debts = netDebts(tripId);
+        debts.sort(BY_FROM_TO_CURRENCY);
+        return debts.stream()
+                .filter(debt -> (debt.fromMemberId() == myMemberId && debt.toMemberId() == memberId)
+                        || (debt.fromMemberId() == memberId && debt.toMemberId() == myMemberId))
+                .toList();
+    }
+
+    /**
+     * 行程里每对人、每个币别的净额。每对人最多返回一个方向，且该方向的金额为正数，表示 fromMemberId 欠 toMemberId 的金额
+     */
+    private List<DebtView> netDebts(long tripId) {
+        List<DebtRow> debtRows = debtMapper.getDebts(tripId);
+        RepaymentSums repaymentSums = repaymentService.sumsByStatus(tripId);
+        return calculateNetAmountMinor(debtRows, repaymentSums);
     }
 
     private static @NonNull List<DebtView> involving(Long memberId, List<DebtView> debts) {
