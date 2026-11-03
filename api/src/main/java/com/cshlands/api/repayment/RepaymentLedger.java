@@ -4,11 +4,16 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * 还款对外的只读入口，给 debt 包读汇总用。只依赖 Mapper，不依赖创建还款那些类：
+ * debt 的 DebtService 实现了 {@link RepayableAmount}，创建还款的类会注入它，
+ * 如果 debt 依赖的是会注入创建还款的类，bean 之间就成环了。
+ */
 @Service
-public class RepaymentService {
+public class RepaymentLedger {
     private final RepaymentMapper repaymentMapper;
 
-    RepaymentService(RepaymentMapper repaymentMapper) {
+    RepaymentLedger(RepaymentMapper repaymentMapper) {
         this.repaymentMapper = repaymentMapper;
     }
 

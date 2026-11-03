@@ -2,7 +2,8 @@ package com.cshlands.api.debt;
 
 import com.cshlands.api.common.ApiException;
 import com.cshlands.api.member.MemberService;
-import com.cshlands.api.repayment.RepaymentService;
+import com.cshlands.api.repayment.RepayableAmount;
+import com.cshlands.api.repayment.RepaymentLedger;
 import com.cshlands.api.repayment.RepaymentSum;
 import com.cshlands.api.repayment.RepaymentSums;
 import org.jspecify.annotations.NonNull;
@@ -12,13 +13,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 
 @Service
-class DebtService {
-    private final RepaymentService repaymentService;
+class DebtService implements RepayableAmount {
+    private final RepaymentLedger repaymentLedger;
     private final DebtMapper debtMapper;
     private final MemberService memberService;
 
-    DebtService(RepaymentService repaymentService, DebtMapper debtMapper, MemberService memberService) {
-        this.repaymentService = repaymentService;
+    DebtService(RepaymentLedger repaymentLedger, DebtMapper debtMapper, MemberService memberService) {
+        this.repaymentLedger = repaymentLedger;
         this.debtMapper = debtMapper;
         this.memberService = memberService;
     }
@@ -73,7 +74,7 @@ class DebtService {
      */
     private List<DebtView> netDebts(long tripId) {
         List<DebtRow> debtRows = debtMapper.getDebts(tripId);
-        RepaymentSums repaymentSums = repaymentService.sumsByStatus(tripId);
+        RepaymentSums repaymentSums = repaymentLedger.sumsByStatus(tripId);
         return calculateNetAmountMinor(debtRows, repaymentSums);
     }
 
@@ -182,4 +183,14 @@ class DebtService {
     }
 
 
+    @Override
+    public long maxRepayable(long tripId, long fromMemberId, long toMemberId, String currency) {
+        List<DebtView> debtViews = netDebts(tripId);// 计算净额，确保 pending 也被考虑
+        for (DebtView debtView : debtViews) {
+            if (debtView.fromMemberId() == fromMemberId && debtView.toMemberId() == toMemberId && debtView.currency().equals(currency)) {
+                return Math.max(0, debtView.amountMinor() - debtView.pendingMinor());
+            }
+        }
+        return 0L;
+    }
 }
