@@ -333,7 +333,7 @@ Trip 对象：
 - 创建者必须是在籍成员；对方可以已退出（收款方要记下「已收到」一个已退出的人的还款，应该可以；付款方给已退出的人标记已还款也允许，但之后只能取消，没有人能确认）。`fromMemberId`、`toMemberId` 不属于本行程 → 400 `MEMBER_NOT_IN_TRIP`；两者相同 → 400 `VALIDATION_FAILED`（`fields` 指向 `toMemberId`）。
 - 金额：`clearedAmountMinor` 要是 `clearedCurrency` 的 `roundingUnit` 的整数倍，`paidAmountMinor` 要是 `paidCurrency` 的整数倍，都 > 0，否则 400 `AMOUNT_NOT_ROUNDABLE` / `VALIDATION_FAILED`。跨币别时不校验汇率合不合理。各项 `paidAmountMinor` 之和就是这次转账的总额，不另存。币别必须在币别列表里。
 - **额度**：每项 `clearedAmountMinor` 不能超过该币别当前可还的欠款，也就是（`from` 欠 `to` 的）`amountMinor` 减去同方向其他待确认的还款（不足 0 按 0 算），否则 400 `REPAYMENT_EXCEEDS_DEBT`。「当前没有 `from` 欠 `to` 的欠款」（净额为 0 或方向相反）同样是这个错误，不是 `VALIDATION_FAILED`。少还（部分结清）允许，剩下的欠款继续存在。
-- **错误的先后**：不是在籍成员 → 404；已有同一 `clientUuid` 的记录 → 按下面的重放处理；创建者不是 `from` / `to` → 403；`expenseId` 看不见 → 404；请求本身有错 → 400；额度不足 → 400 `REPAYMENT_EXCEEDS_DEBT`。`fields` 指向顶层字段名（如 `items`、`paidCurrency`），不带下标。
+- **错误的先后**：不是在籍成员 → 404；已有同一 `clientUuid` 的记录 → 按下面的重放处理；创建者不是 `from` / `to` → 403；`expenseId` 看不见 → 404；请求本身有错 → 400（指业务校验：币别、金额、成员等；缺字段、`items` 为空这类格式错误由框架先拦下，同样是 400 `VALIDATION_FAILED`，排在最前面）；额度不足 → 400 `REPAYMENT_EXCEEDS_DEBT`。`fields` 指向顶层字段名（如 `items`、`paidCurrency`），不带下标。
 - **重放**（同一 `(tripId, clientUuid)`，通用约定里的幂等规则）：创建者必须和原来相同（创建者决定是 `pending` 还是 `confirmed`，换人就是不同的意图）。内容比较：`fromMemberId`、`toMemberId`、`paidCurrency`、`items`（按 `clearedCurrency` 配对，比三个金额）、`expenseId`、`note`，没带的可选字段不参与比较。内容一致 → 200 返回已有的那组；内容不一致、创建者不同、或这组里有已取消的行 → 409 `IDEMPOTENCY_KEY_REUSED`，消息一样。重放不再检查成员和额度（成员后来退出，原样重放仍是 200）。
 - 响应 201 `{"settlementGroupId": "...", "items": [还款对象]}`，`items` 按 `clearedCurrency` 升序；按幂等规则重复提交返回 200。
 
