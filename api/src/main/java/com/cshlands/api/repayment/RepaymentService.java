@@ -110,7 +110,7 @@ class RepaymentService {
 
         // 创建者必然是 me，已经被校验过了；对方可能已退出，所以不用 requireActiveMembers
         long otherMemberId = (creatorMemberId == fromMemberId) ? toMemberId : fromMemberId;
-        if (!memberService.requireMemberOfTrip(tripId, otherMemberId)) {
+        if (!memberService.isMemberOfTrip(tripId, otherMemberId)) {
             throw ApiException.of(ErrorCode.MEMBER_NOT_IN_TRIP, "The other member is not in the trip");
         }
 

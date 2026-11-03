@@ -48,10 +48,10 @@ public class MemberService {
     }
 
     /**
-     * 路径里的 memberId 必须属于这个 Trip（已退出的也算）；不属于 → 404。
-     * 调用者自己先过 {@link #requireActiveMember}，Trip 不存在或已删除时那一步已经是 404。
+     * 路径里的 memberId 必须属于这个 Trip（已退出的也算）；不属于（为 null）则返回假。
+     * 调用者自己先过 {@link #requireActiveMember}，Trip 不存在或已删除时那一步已经是 404，不会到这里。
      */
-    public boolean requireMemberOfTrip(long tripId, long memberId) {
+    public boolean isMemberOfTrip(long tripId, long memberId) {
         return memberMapper.findById(memberId, tripId) != null;
     }
 

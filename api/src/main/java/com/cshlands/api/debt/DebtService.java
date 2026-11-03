@@ -59,7 +59,7 @@ class DebtService implements RepayableAmount {
         if (memberId == myMemberId) {
             throw ApiException.validationFailed("memberId", "must be a member other than yourself");
         }
-        boolean isMemberInTrip = memberService.requireMemberOfTrip(tripId, memberId);
+        boolean isMemberInTrip = memberService.isMemberOfTrip(tripId, memberId);
         if(! isMemberInTrip) {
             throw ApiException.notFound();
         }
