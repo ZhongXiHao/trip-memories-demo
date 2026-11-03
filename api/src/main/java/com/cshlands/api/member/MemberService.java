@@ -5,6 +5,7 @@ import com.cshlands.api.common.ErrorCode;
 import com.cshlands.api.user.UserMapper;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
@@ -44,6 +45,23 @@ public class MemberService {
             throw ApiException.notFound();
         }
         return member;
+    }
+
+    /**
+     * 路径里的 memberId 必须属于这个 Trip（已退出的也算）；不属于（为 null）则返回假。
+     * 调用者自己先过 {@link #requireActiveMember}，Trip 不存在或已删除时那一步已经是 404，不会到这里。
+     */
+    public boolean isMemberOfTrip(long tripId, long memberId) {
+        return memberMapper.findById(memberId, tripId) != null;
+    }
+
+    /**
+     * 锁住两个成员行，让涉及同一对人的并发写入排队（比如两个还款请求各自没超额、合起来超额）。
+     * 必须在调用方的事务里调用：没有事务时直接抛异常，而不是悄悄地什么也没锁住。
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockMembers(long tripId, long memberIdA, long memberIdB) {
+        memberMapper.lockByIds(tripId, memberIdA, memberIdB);
     }
 
     /**
