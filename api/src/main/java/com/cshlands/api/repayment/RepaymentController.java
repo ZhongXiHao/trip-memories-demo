@@ -18,10 +18,13 @@ import org.springframework.web.bind.annotation.RestController;
 class RepaymentController {
     private final RepaymentService repaymentService;
     private final RepaymentQueryService repaymentQueryService;
+    private final RepaymentStatusService repaymentStatusService;
 
-    RepaymentController(RepaymentService repaymentService, RepaymentQueryService repaymentQueryService) {
+    RepaymentController(RepaymentService repaymentService, RepaymentQueryService repaymentQueryService,
+                        RepaymentStatusService repaymentStatusService) {
         this.repaymentService = repaymentService;
         this.repaymentQueryService = repaymentQueryService;
+        this.repaymentStatusService = repaymentStatusService;
     }
 
     /**
@@ -41,5 +44,25 @@ class RepaymentController {
             @RequestParam(name = "memberId", required = false) Long memberId,
             @RequestParam(required = false) String settlementGroupId) {
         return new PageResult<>(repaymentQueryService.list(CurrentUser.id(), tripId, status, memberId, settlementGroupId));
+    }
+
+    @PostMapping("/{repaymentId}/confirm")
+    RepaymentView confirm(@PathVariable long tripId, @PathVariable long repaymentId) {
+        return repaymentStatusService.confirm(CurrentUser.id(), tripId, repaymentId);
+    }
+
+    @PostMapping("/groups/{settlementGroupId}/confirm")
+    PageResult<RepaymentView> confirmGroup(@PathVariable long tripId, @PathVariable String settlementGroupId) {
+        return new PageResult<>(repaymentStatusService.confirmGroup(CurrentUser.id(), tripId, settlementGroupId));
+    }
+
+    @PostMapping("/{repaymentId}/cancel")
+    RepaymentView cancel(@PathVariable long tripId, @PathVariable long repaymentId) {
+        return repaymentStatusService.cancel(CurrentUser.id(), tripId, repaymentId);
+    }
+
+    @PostMapping("/groups/{settlementGroupId}/cancel")
+    PageResult<RepaymentView> cancelGroup(@PathVariable long tripId, @PathVariable String settlementGroupId) {
+        return new PageResult<>(repaymentStatusService.cancelGroup(CurrentUser.id(), tripId, settlementGroupId));
     }
 }

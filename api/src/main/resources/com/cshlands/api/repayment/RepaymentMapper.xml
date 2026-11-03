@@ -9,6 +9,14 @@
         expense_id, status, confirmed_at, note, created_by_member_id, version, created_at, deleted_at
     </sql>
 
+    <!-- 一条还款，含已取消的；trip_id 限定在这个行程里，别的行程的 id 读不到 -->
+    <select id="findById" resultType="com.cshlands.api.repayment.RepaymentRow">
+        SELECT
+        <include refid="rowColumns"/>
+        FROM repayment
+        WHERE trip_id = #{tripId} AND id = #{repaymentId}
+    </select>
+
     <!-- 一个转账组里的所有行，含已取消的（重放要用）；按币别升序，和创建的响应一致 -->
     <select id="findByGroup" resultType="com.cshlands.api.repayment.RepaymentRow">
         SELECT
