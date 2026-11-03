@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cshlands.api.repayment.RepaymentMapper">
+    <sql id="rowColumns">
+        id, trip_id, settlement_group_id, from_member_id, to_member_id,
+        cleared_amount_minor, cleared_currency, paid_amount_minor, paid_currency,
+        expense_id, status, confirmed_at, note, created_by_member_id, version, created_at, deleted_at
+    </sql>
+
+    <!-- 一个转账组里的所有行，含已取消的（重放要用）；按币别升序，和创建的响应一致 -->
+    <select id="findByGroup" resultType="com.cshlands.api.repayment.RepaymentRow">
+        SELECT
+        <include refid="rowColumns"/>
+        FROM repayment
+        WHERE trip_id = #{tripId} AND settlement_group_id = #{settlementGroupId}
+        ORDER BY cleared_currency, id
+    </select>
+
+    <!-- 一条语句插入一个组的所有行：任何一行撞唯一键，整条语句都失败，不会留下半组 -->
+    <insert id="insertAll">
+        INSERT INTO repayment (trip_id, from_member_id, to_member_id, cleared_amount_minor, cleared_currency,
+        paid_amount_minor, paid_currency, settlement_group_id, expense_id, status, confirmed_at, note,
+        created_by_member_id)
+        VALUES
+        <foreach collection="rows" item="row" separator=",">
+            (#{row.tripId}, #{row.fromMemberId}, #{row.toMemberId}, #{row.clearedAmountMinor}, #{row.clearedCurrency},
+            #{row.paidAmountMinor}, #{row.paidCurrency}, #{row.settlementGroupId}, #{row.expenseId}, #{row.status},
+            IF(#{row.status} = 'confirmed', CURRENT_TIMESTAMP(3), NULL), #{row.note}, #{row.createdByMemberId})
+        </foreach>
+    </insert>
+</mapper>
