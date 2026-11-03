@@ -1,22 +1,27 @@
 package com.cshlands.api.repayment;
 
 import com.cshlands.api.auth.CurrentUser;
+import com.cshlands.api.common.PageResult;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/trips/{tripId}/repayments")
 class RepaymentController {
     private final RepaymentService repaymentService;
+    private final RepaymentQueryService repaymentQueryService;
 
-    RepaymentController(RepaymentService repaymentService) {
+    RepaymentController(RepaymentService repaymentService, RepaymentQueryService repaymentQueryService) {
         this.repaymentService = repaymentService;
+        this.repaymentQueryService = repaymentQueryService;
     }
 
     /**
@@ -27,5 +32,14 @@ class RepaymentController {
         RepaymentResult result = repaymentService.create(CurrentUser.id(), tripId, request);
         HttpStatus status = result.created() ? HttpStatus.CREATED : HttpStatus.OK;
         return ResponseEntity.status(status).body(result.group());
+    }
+
+    @GetMapping
+    PageResult<RepaymentView> list(
+            @PathVariable long tripId,
+            @RequestParam(required = false) RepaymentStatus status,
+            @RequestParam(name = "memberId", required = false) Long memberId,
+            @RequestParam(required = false) String settlementGroupId) {
+        return new PageResult<>(repaymentQueryService.list(CurrentUser.id(), tripId, status, memberId, settlementGroupId));
     }
 }

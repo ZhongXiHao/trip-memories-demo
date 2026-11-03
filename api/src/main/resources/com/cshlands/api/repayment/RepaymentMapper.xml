@@ -18,6 +18,17 @@
         ORDER BY cleared_currency, id
     </select>
 
+    <select id="list" resultType="com.cshlands.api.repayment.RepaymentRow">
+        SELECT
+        <include refid="rowColumns"/>
+        FROM repayment
+        WHERE trip_id = #{tripId} AND deleted_at IS NULL
+        <if test="status!=null">AND status = #{status}</if>
+        <if test="memberId!=null">AND (from_member_id = #{memberId} OR to_member_id = #{memberId})</if>
+        <if test="settlementGroupId!=null">AND settlement_group_id = #{settlementGroupId}</if>
+        ORDER BY created_at DESC, id DESC
+    </select>
+
     <!-- 一条语句插入一个组的所有行：任何一行撞唯一键，整条语句都失败，不会留下半组 -->
     <insert id="insertAll">
         INSERT INTO repayment (trip_id, from_member_id, to_member_id, cleared_amount_minor, cleared_currency,

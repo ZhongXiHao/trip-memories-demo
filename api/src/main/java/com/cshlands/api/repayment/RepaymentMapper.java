@@ -30,4 +30,6 @@ interface RepaymentMapper {
     List<RepaymentRow> findByGroup(@Param("tripId") long tripId, @Param("settlementGroupId") String settlementGroupId);
 
     void insertAll(@Param("rows") List<NewRepayment> rows);
+
+    List<RepaymentRow> list(RepaymentListQuery query);
 }
