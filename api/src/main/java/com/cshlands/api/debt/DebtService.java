@@ -59,7 +59,10 @@ class DebtService implements RepayableAmount {
         if (memberId == myMemberId) {
             throw ApiException.validationFailed("memberId", "must be a member other than yourself");
         }
-        memberService.requireMemberOfTrip(tripId, memberId);
+        boolean isMemberInTrip = memberService.requireMemberOfTrip(tripId, memberId);
+        if(! isMemberInTrip) {
+            throw ApiException.notFound();
+        }
 
         List<DebtView> debts = netDebts(tripId);
         debts.sort(BY_FROM_TO_CURRENCY);
