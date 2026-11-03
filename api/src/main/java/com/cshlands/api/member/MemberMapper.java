@@ -45,6 +45,10 @@ interface MemberMapper {
     @Select(MEMBER_VIEW_SELECT + " AND (#{status} IS NULL OR m.status = #{status}) ORDER BY m.id")
     List<MemberView> list(@Param("tripId") long tripId, @Param("status") MemberStatus status);
 
+    /** 锁住这个 Trip 里的两个成员行（行锁，按 id 升序加锁，所有调用方顺序一致，不会互相死锁）。必须在事务里调用 */
+    @Select("SELECT id FROM trip_member WHERE trip_id = #{tripId} AND id IN (#{memberIdA}, #{memberIdB}) ORDER BY id FOR UPDATE")
+    List<Long> lockByIds(@Param("tripId") long tripId, @Param("memberIdA") long memberIdA, @Param("memberIdB") long memberIdB);
+
     /** 把在籍的非 Owner 设为已退出（按 userId）；影响 0 行说明不在籍或是 Owner */
     @Update("UPDATE trip_member SET status = 'left' " +
             "WHERE trip_id = #{tripId} AND user_id = #{userId} AND status = 'active' AND role <> 'owner'")
