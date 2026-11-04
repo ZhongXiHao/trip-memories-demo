@@ -196,4 +196,11 @@ class DebtService implements RepayableAmount {
         }
         return 0L;
     }
+
+    @Transactional(readOnly = true)
+    List<DebtView> debtsInvolving(long tripId, long memberId) {
+        List<DebtView> debts = new ArrayList<>(involving(memberId, netDebts(tripId)));
+        debts.sort(BY_FROM_TO_CURRENCY);
+        return debts;
+    }
 }

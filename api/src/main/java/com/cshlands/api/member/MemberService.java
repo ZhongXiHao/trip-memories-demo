@@ -119,10 +119,10 @@ public class MemberService {
     }
 
     /** 成员自己退出。参数里的是 userId（当前登录的人）。 */
-    MemberChangeResult quit(long userId, long tripId) {
+    MemberView quit(long userId, long tripId) {
         for (int attempt = 0; attempt < 2; attempt++) {
             if (memberMapper.markLeft(userId, tripId) > 0) {
-                return new MemberChangeResult(memberMapper.findByUser(userId, tripId), List.of());
+                return memberMapper.findByUser(userId, tripId);
             }
             ActiveMember member = requireActiveMember(userId, tripId);   // 不在籍 → 404
             if (member.role() == MemberRole.OWNER) {
@@ -137,7 +137,7 @@ public class MemberService {
      * 仅 Owner。注意 memberId 是 trip_member.id，不是 userId，两者不是同一个编号。
      * 对已退出的成员重复调用返回 200（幂等）；memberId 不属于这个 Trip → 404；目标是 Owner → 409。
      */
-    MemberChangeResult remove(long userId, long tripId, long memberId) {
+    MemberView remove(long userId, long tripId, long memberId) {
         ActiveMember me = requireOwner(userId, tripId); // 检查自己是 Owner，否则 403；不在籍 → 404
         if (me.memberId() == memberId) {
             throw cannotRemoveOwner();
@@ -152,7 +152,7 @@ public class MemberService {
             // 仍在籍：他在上面两步之间刚好被转让成了 Owner，UPDATE 因此没有生效
             throw cannotRemoveOwner();
         }
-        return new MemberChangeResult(after, List.of());
+        return after;
     }
 
     /**
