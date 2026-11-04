@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import 'vant/es/toast/style'
 
+import type { DebtView } from '@/api/debts'
 import { describeError, toApiError } from '@/api/errors'
 import {
   listMembers,
@@ -20,16 +21,18 @@ import CurrencyTag from '@/components/CurrencyTag.vue'
 import MoreMenu from '@/components/MoreMenu.vue'
 import TripExpenses from '@/components/TripExpenses.vue'
 import TripMembers from '@/components/TripMembers.vue'
+import TripSettlement from '@/components/TripSettlement.vue'
+import UnsettledDebtsDialog from '@/components/UnsettledDebtsDialog.vue'
 import { formatDateRange } from '@/utils/date'
 import { confirmAction } from '@/utils/dialog'
 import { useIsDesktop } from '@/utils/media'
-import { roleLabel, splitMembers } from '@/utils/members'
+import { roleLabel, splitMembers, unsettledDebtsOf } from '@/utils/members'
 import { tripMenuItems, type TripMenuKey } from '@/utils/menus'
 import { timezoneLabel, timezoneShortLabel } from '@/utils/timezones'
 import { TRIP_TABS, queryWithTab, tabFromQuery, type TripTab } from '@/utils/tripTabs'
 import { showError } from '@/utils/toast'
 
-// 行程详情：页头是行程摘要（日期、展示币别、时区，负责人有标签），下面是支出、欠款（占位）和成员。
+// 行程详情：页头是行程摘要（日期、展示币别、时区，负责人有标签），下面是支出、欠款（含还款）和成员。
 // 编辑、删除、退出行程都在页头的"⋯"菜单里（危险操作不常驻页面，见 DESIGN.md「按钮」）。
 // 手机：主体分成三个标签：支出 / 欠款 / 成员。当前标签写在地址的 ?tab= 里，刷新、从别的页面返回后还在原来的标签。
 // PC（≥ 960px）：不用标签，两栏同时显示（地址里的 ?tab= 不起作用，回到手机宽度时仍然有效）。
@@ -104,10 +107,35 @@ function goEdit() {
   router.push({ name: 'trip-edit', params: { tripId: props.tripId } })
 }
 
-/** 退出、移出时后端可能带提醒（比如还有没结清的欠款）。只提醒，不影响操作结果。 */
-function showWarnings(change: MemberChange) {
+// 退出、移出后还有没结清的欠款：弹窗把它们列出来
+const unsettled = ref<{ title: string; message: string; debts: DebtView[] }>({ title: '', message: '', debts: [] })
+const showUnsettled = ref(false)
+let afterUnsettled: (() => void) | null = null
+
+function onUnsettledClosed() {
+  const next = afterUnsettled
+  afterUnsettled = null
+  next?.()
+}
+
+/**
+ * 告诉用户退出、移出成功了。后端可能带提醒（比如还有没结清的欠款），只提醒，不影响操作结果：
+ * 提醒里带了欠款就弹窗（标题是成功的文字）把它们列出来，关掉之后再做 then；
+ * 否则用提示条显示成功和提醒文字，并立刻做 then。
+ */
+function showResult(change: MemberChange, success: string, then?: () => void) {
+  const debts = unsettledDebtsOf(change.warnings)
+  if (debts.length > 0) {
+    const warning = change.warnings.find((w) => w.code === 'UNSETTLED_DEBTS')
+    unsettled.value = { title: success, message: warning?.message || '还有没结清的欠款：', debts }
+    afterUnsettled = then ?? null
+    showUnsettled.value = true
+    return
+  }
+  showToast({ message: success, type: 'success' })
   const first = change.warnings[0]
   if (first) showToast({ message: first.message, duration: 4000 })
+  then?.()
 }
 
 /**
@@ -153,8 +181,7 @@ async function onRemove(member: MemberView) {
   if (!ok) return
   await runAction(async () => {
     const change = await removeMember(props.tripId, member.memberId)
-    showToast({ message: `已移出 ${member.nickname}`, type: 'success' })
-    showWarnings(change)
+    showResult(change, `已移出 ${member.nickname}`)
     await load(true)
   })
 }
@@ -192,9 +219,8 @@ async function onQuit() {
   if (!ok) return
   await runAction(async () => {
     const change = await quitTrip(props.tripId)
-    showToast({ message: '已退出行程', type: 'success' })
-    showWarnings(change)
-    await router.replace({ name: 'home' })
+    // 有没结清的欠款时，看完再离开（退出后就看不到这个行程了）
+    showResult(change, '已退出行程', () => void router.replace({ name: 'home' }))
   })
 }
 </script>
@@ -238,7 +264,7 @@ async function onQuit() {
         </div>
       </div>
 
-      <!-- PC：两栏，左边支出（宽），右边欠款占位和成员（窄）。"记一笔"在支出栏顶部 -->
+      <!-- PC：两栏，左边支出（宽），右边欠款和成员（窄）。"记一笔"在支出栏顶部 -->
       <div v-else-if="isDesktop" class="tm-container columns">
         <TripExpenses :trip-id="tripId" :members="members" :display-currency="trip.displayCurrency">
           <template #action>
@@ -248,10 +274,12 @@ async function onQuit() {
           </template>
         </TripExpenses>
         <aside class="side">
-          <section aria-labelledby="debts-title">
-            <h2 id="debts-title" class="side__title">欠款</h2>
-            <p class="soon">欠款和还款马上就做。</p>
-          </section>
+          <TripSettlement
+            :trip-id="tripId"
+            :members="members"
+            :my-member-id="trip.myMemberId"
+            :timezone="trip.timezone"
+          />
           <TripMembers
             :active="groups.active"
             :left="groups.left"
@@ -279,7 +307,13 @@ async function onQuit() {
                 :display-currency="trip.displayCurrency"
               />
 
-              <p v-else-if="tab.name === 'debts'" class="soon">欠款和还款马上就做。</p>
+              <TripSettlement
+                v-else-if="tab.name === 'debts'"
+                :trip-id="tripId"
+                :members="members"
+                :my-member-id="trip.myMemberId"
+                :timezone="trip.timezone"
+              />
 
               <TripMembers
                 v-else
@@ -304,6 +338,16 @@ async function onQuit() {
     </main>
 
     <AddMemberPopup v-model:show="showAdd" :trip-id="tripId" @added="load(true)" />
+    <UnsettledDebtsDialog
+      v-if="trip"
+      v-model:show="showUnsettled"
+      :title="unsettled.title"
+      :message="unsettled.message"
+      :debts="unsettled.debts"
+      :members="members"
+      :my-member-id="trip.myMemberId"
+      @closed="onUnsettledClosed"
+    />
   </div>
 </template>
 
@@ -361,15 +405,6 @@ async function onQuit() {
   display: flex;
   flex-direction: column;
   gap: var(--tm-space-5);
-}
-
-.side__title {
-  display: flex;
-  align-items: center;
-  min-height: var(--tm-tap-min);
-  margin: 0 0 var(--tm-space-2);
-  font-size: var(--tm-text-md);
-  font-weight: 600;
 }
 
 .add-expense {
@@ -446,14 +481,5 @@ async function onQuit() {
   -webkit-line-clamp: 2;
   line-clamp: 2;
   overflow-wrap: anywhere;
-}
-
-.soon {
-  margin: 0;
-  padding: var(--tm-space-4);
-  border: 1px dashed var(--tm-line);
-  border-radius: var(--tm-radius-card);
-  color: var(--tm-muted);
-  font-size: var(--tm-text-sm);
 }
 </style>

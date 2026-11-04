@@ -75,6 +75,8 @@ const MESSAGES: Record<string, string> = {
   MEMBER_LEFT: '付款人或分摊的人已经退出行程，刷新后重选',
   VERSION_CONFLICT: '这条内容刚被别人改过，刷新后再改',
   IDEMPOTENCY_KEY_REUSED: '这一笔之前已经提交过，内容不一样。回到列表看看是否已经记上',
+  REPAYMENT_EXCEEDS_DEBT: '还款金额超过了现在可还的欠款，刷新后再试',
+  REPAYMENT_ALREADY_CONFIRMED: '这笔还款已经确认，不能取消',
 }
 
 /** 给用户看的错误文字（中文）。表单字段错误由页面自己用 fieldMessage 处理。 */

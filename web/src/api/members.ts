@@ -1,3 +1,4 @@
+import type { DebtView } from './debts'
 import { http } from './http'
 import type { MemberRole } from './trips'
 
@@ -25,6 +26,8 @@ export async function listMembers(tripId: number): Promise<MemberView[]> {
 export interface MemberWarning {
   code: string
   message: string
+  /** code = UNSETTLED_DEBTS 时带上：没结清的欠款，和欠款总览的 items 一样 */
+  debts?: DebtView[]
 }
 
 /** 退出、移出的响应 */
