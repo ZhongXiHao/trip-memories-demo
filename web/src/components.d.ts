@@ -26,6 +26,8 @@ declare module 'vue' {
     TripExpenses: typeof import('./components/TripExpenses.vue')['default']
     TripForm: typeof import('./components/TripForm.vue')['default']
     TripMembers: typeof import('./components/TripMembers.vue')['default']
+    TripRepayments: typeof import('./components/TripRepayments.vue')['default']
+    TripSettlement: typeof import('./components/TripSettlement.vue')['default']
     VanActionSheet: typeof import('vant/es')['ActionSheet']
     VanButton: typeof import('vant/es')['Button']
     VanCalendar: typeof import('vant/es')['Calendar']

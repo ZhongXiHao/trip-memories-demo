@@ -18,9 +18,9 @@ import AddMemberPopup from '@/components/AddMemberPopup.vue'
 import BoardHeader from '@/components/BoardHeader.vue'
 import CurrencyTag from '@/components/CurrencyTag.vue'
 import MoreMenu from '@/components/MoreMenu.vue'
-import TripDebts from '@/components/TripDebts.vue'
 import TripExpenses from '@/components/TripExpenses.vue'
 import TripMembers from '@/components/TripMembers.vue'
+import TripSettlement from '@/components/TripSettlement.vue'
 import { formatDateRange } from '@/utils/date'
 import { confirmAction } from '@/utils/dialog'
 import { useIsDesktop } from '@/utils/media'
@@ -30,7 +30,7 @@ import { timezoneLabel, timezoneShortLabel } from '@/utils/timezones'
 import { TRIP_TABS, queryWithTab, tabFromQuery, type TripTab } from '@/utils/tripTabs'
 import { showError } from '@/utils/toast'
 
-// 行程详情：页头是行程摘要（日期、展示币别、时区，负责人有标签），下面是支出、欠款和成员。
+// 行程详情：页头是行程摘要（日期、展示币别、时区，负责人有标签），下面是支出、欠款（含还款）和成员。
 // 编辑、删除、退出行程都在页头的"⋯"菜单里（危险操作不常驻页面，见 DESIGN.md「按钮」）。
 // 手机：主体分成三个标签：支出 / 欠款 / 成员。当前标签写在地址的 ?tab= 里，刷新、从别的页面返回后还在原来的标签。
 // PC（≥ 960px）：不用标签，两栏同时显示（地址里的 ?tab= 不起作用，回到手机宽度时仍然有效）。
@@ -249,7 +249,12 @@ async function onQuit() {
           </template>
         </TripExpenses>
         <aside class="side">
-          <TripDebts :trip-id="tripId" :members="members" :my-member-id="trip.myMemberId" />
+          <TripSettlement
+            :trip-id="tripId"
+            :members="members"
+            :my-member-id="trip.myMemberId"
+            :timezone="trip.timezone"
+          />
           <TripMembers
             :active="groups.active"
             :left="groups.left"
@@ -277,11 +282,12 @@ async function onQuit() {
                 :display-currency="trip.displayCurrency"
               />
 
-              <TripDebts
+              <TripSettlement
                 v-else-if="tab.name === 'debts'"
                 :trip-id="tripId"
                 :members="members"
                 :my-member-id="trip.myMemberId"
+                :timezone="trip.timezone"
               />
 
               <TripMembers
