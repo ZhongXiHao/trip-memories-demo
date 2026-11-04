@@ -1,4 +1,5 @@
-import type { MemberView } from '@/api/members'
+import type { DebtView } from '@/api/debts'
+import type { MemberWarning, MemberView } from '@/api/members'
 import type { MemberRole } from '@/api/trips'
 
 /**
@@ -20,4 +21,12 @@ export function splitMembers(members: MemberView[]): { active: MemberView[]; lef
  */
 export function roleLabel(role: MemberRole): string {
   return role === 'owner' ? '负责人' : '成员'
+}
+
+/**
+ * 退出、移出的 warnings 里没结清的欠款（code = UNSETTLED_DEBTS 的那条带的 debts）。
+ * 没有这条提醒、或者它没带 debts 时是空数组。
+ */
+export function unsettledDebtsOf(warnings: MemberWarning[]): DebtView[] {
+  return warnings.flatMap((w) => (w.code === 'UNSETTLED_DEBTS' && Array.isArray(w.debts) ? w.debts : []))
 }

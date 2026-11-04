@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { MemberView } from '@/api/members'
 
-import { roleLabel, splitMembers } from '../members'
+import { roleLabel, splitMembers, unsettledDebtsOf } from '../members'
 
 function member(memberId: number, role: MemberView['role'], status: MemberView['status']): MemberView {
   return { memberId, userId: memberId + 100, nickname: `m${memberId}`, role, status, joinedAt: '2026-10-01T00:00:00Z' }
@@ -48,5 +48,19 @@ describe('roleLabel', () => {
   it('calls the owner 负责人 (not 创建者: ownership can be transferred)', () => {
     expect(roleLabel('owner')).toBe('负责人')
     expect(roleLabel('member')).toBe('成员')
+  })
+})
+
+describe('unsettledDebtsOf', () => {
+  const debt = { fromMemberId: 5, toMemberId: 3, currency: 'JPY', amountMinor: 340000, pendingMinor: 0 }
+
+  it('takes the debts carried by the UNSETTLED_DEBTS warning', () => {
+    expect(unsettledDebtsOf([{ code: 'UNSETTLED_DEBTS', message: 'x', debts: [debt] }])).toEqual([debt])
+  })
+
+  it('is empty without that warning, or when the warning carries no debts', () => {
+    expect(unsettledDebtsOf([])).toEqual([])
+    expect(unsettledDebtsOf([{ code: 'UNSETTLED_DEBTS', message: 'x' }])).toEqual([])
+    expect(unsettledDebtsOf([{ code: 'SOMETHING_ELSE', message: 'x', debts: [debt] }])).toEqual([])
   })
 })

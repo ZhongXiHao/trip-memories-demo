@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import 'vant/es/toast/style'
 
+import type { DebtView } from '@/api/debts'
 import { describeError, toApiError } from '@/api/errors'
 import {
   listMembers,
@@ -21,10 +22,11 @@ import MoreMenu from '@/components/MoreMenu.vue'
 import TripExpenses from '@/components/TripExpenses.vue'
 import TripMembers from '@/components/TripMembers.vue'
 import TripSettlement from '@/components/TripSettlement.vue'
+import UnsettledDebtsDialog from '@/components/UnsettledDebtsDialog.vue'
 import { formatDateRange } from '@/utils/date'
 import { confirmAction } from '@/utils/dialog'
 import { useIsDesktop } from '@/utils/media'
-import { roleLabel, splitMembers } from '@/utils/members'
+import { roleLabel, splitMembers, unsettledDebtsOf } from '@/utils/members'
 import { tripMenuItems, type TripMenuKey } from '@/utils/menus'
 import { timezoneLabel, timezoneShortLabel } from '@/utils/timezones'
 import { TRIP_TABS, queryWithTab, tabFromQuery, type TripTab } from '@/utils/tripTabs'
@@ -105,10 +107,35 @@ function goEdit() {
   router.push({ name: 'trip-edit', params: { tripId: props.tripId } })
 }
 
-/** 退出、移出时后端可能带提醒（比如还有没结清的欠款）。只提醒，不影响操作结果。 */
-function showWarnings(change: MemberChange) {
+// 退出、移出后还有没结清的欠款：弹窗把它们列出来
+const unsettled = ref<{ title: string; message: string; debts: DebtView[] }>({ title: '', message: '', debts: [] })
+const showUnsettled = ref(false)
+let afterUnsettled: (() => void) | null = null
+
+function onUnsettledClosed() {
+  const next = afterUnsettled
+  afterUnsettled = null
+  next?.()
+}
+
+/**
+ * 告诉用户退出、移出成功了。后端可能带提醒（比如还有没结清的欠款），只提醒，不影响操作结果：
+ * 提醒里带了欠款就弹窗（标题是成功的文字）把它们列出来，关掉之后再做 then；
+ * 否则用提示条显示成功和提醒文字，并立刻做 then。
+ */
+function showResult(change: MemberChange, success: string, then?: () => void) {
+  const debts = unsettledDebtsOf(change.warnings)
+  if (debts.length > 0) {
+    const warning = change.warnings.find((w) => w.code === 'UNSETTLED_DEBTS')
+    unsettled.value = { title: success, message: warning?.message || '还有没结清的欠款：', debts }
+    afterUnsettled = then ?? null
+    showUnsettled.value = true
+    return
+  }
+  showToast({ message: success, type: 'success' })
   const first = change.warnings[0]
   if (first) showToast({ message: first.message, duration: 4000 })
+  then?.()
 }
 
 /**
@@ -154,8 +181,7 @@ async function onRemove(member: MemberView) {
   if (!ok) return
   await runAction(async () => {
     const change = await removeMember(props.tripId, member.memberId)
-    showToast({ message: `已移出 ${member.nickname}`, type: 'success' })
-    showWarnings(change)
+    showResult(change, `已移出 ${member.nickname}`)
     await load(true)
   })
 }
@@ -193,9 +219,8 @@ async function onQuit() {
   if (!ok) return
   await runAction(async () => {
     const change = await quitTrip(props.tripId)
-    showToast({ message: '已退出行程', type: 'success' })
-    showWarnings(change)
-    await router.replace({ name: 'home' })
+    // 有没结清的欠款时，看完再离开（退出后就看不到这个行程了）
+    showResult(change, '已退出行程', () => void router.replace({ name: 'home' }))
   })
 }
 </script>
@@ -313,6 +338,16 @@ async function onQuit() {
     </main>
 
     <AddMemberPopup v-model:show="showAdd" :trip-id="tripId" @added="load(true)" />
+    <UnsettledDebtsDialog
+      v-if="trip"
+      v-model:show="showUnsettled"
+      :title="unsettled.title"
+      :message="unsettled.message"
+      :debts="unsettled.debts"
+      :members="members"
+      :my-member-id="trip.myMemberId"
+      @closed="onUnsettledClosed"
+    />
   </div>
 </template>
 
