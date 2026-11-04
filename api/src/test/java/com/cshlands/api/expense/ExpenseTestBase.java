@@ -77,7 +77,7 @@ abstract class ExpenseTestBase {
 
     /** 时区 Asia/Tokyo、没有开始日期的行程，创建者是 Owner */
     protected long trip(long ownerId) {
-        jdbc.update("INSERT INTO trip (name, timezone, display_currency, created_by) "
+        jdbc.update("INSERT INTO trip (name, timezone, default_currency, created_by) "
                 + "VALUES ('東京', 'Asia/Tokyo', 'HKD', ?)", ownerId);
         long tripId = jdbc.queryForObject("SELECT MAX(id) FROM trip", Long.class);
         member(tripId, ownerId, "owner", "active");

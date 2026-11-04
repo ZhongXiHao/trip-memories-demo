@@ -43,14 +43,14 @@ CREATE TABLE trip
     start_date       DATE         NULL,
     end_date         DATE         NULL,
     timezone         VARCHAR(64)  NOT NULL COMMENT 'IANA，例如 Asia/Tokyo',
-    display_currency CHAR(3)      NOT NULL COMMENT '仅用于显示概数，不写入账目；规则指令缺币别时也取它',
+    default_currency CHAR(3)      NOT NULL COMMENT '默认币别（如东京之旅填 JPY）：前端记一笔、规则指令没写币别时都取它；每笔支出仍记自己的币别',
     created_by       BIGINT       NOT NULL,
     created_at       DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at       DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted_at       DATETIME(3)  NULL,
     PRIMARY KEY (id),
     CONSTRAINT fk_trip_creator FOREIGN KEY (created_by) REFERENCES app_user (id),
-    CONSTRAINT fk_trip_display_currency FOREIGN KEY (display_currency) REFERENCES currency (code),
+    CONSTRAINT fk_trip_default_currency FOREIGN KEY (default_currency) REFERENCES currency (code),
     CHECK (end_date IS NULL OR start_date IS NULL OR end_date >= start_date)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4;

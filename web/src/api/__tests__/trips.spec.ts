@@ -11,7 +11,7 @@ const trip: TripView = {
   startDate: '2026-10-01',
   endDate: '2026-10-05',
   timezone: 'Asia/Tokyo',
-  displayCurrency: 'CNY',
+  defaultCurrency: 'CNY',
   myMemberId: 3,
   myRole: 'owner',
   memberCount: 3,
@@ -21,7 +21,7 @@ const trip: TripView = {
 const request: TripRequest = {
   name: '东京五日游',
   description: null,
-  displayCurrency: 'CNY',
+  defaultCurrency: 'CNY',
   timezone: 'Asia/Tokyo',
   startDate: '2026-10-01',
   endDate: '2026-10-05',

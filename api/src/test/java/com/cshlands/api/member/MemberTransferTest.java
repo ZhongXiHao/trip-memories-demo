@@ -40,7 +40,7 @@ class MemberTransferTest {
     private static final long EXPLICIT_ID = 900_000_002L;
 
     private static final String TRIP_JSON = """
-            {"name": "改名了", "displayCurrency": "HKD", "timezone": "UTC"}""";
+            {"name": "改名了", "defaultCurrency": "HKD", "timezone": "UTC"}""";
 
     @Autowired
     MockMvc mockMvc;
@@ -77,7 +77,7 @@ class MemberTransferTest {
     }
 
     private long trip(long ownerId) {
-        jdbc.update("INSERT INTO trip (name, timezone, display_currency, created_by) "
+        jdbc.update("INSERT INTO trip (name, timezone, default_currency, created_by) "
                 + "VALUES ('東京', 'Asia/Tokyo', 'HKD', ?)", ownerId);
         long tripId = jdbc.queryForObject("SELECT MAX(id) FROM trip", Long.class);
         member(tripId, ownerId, "owner", "active");

@@ -64,7 +64,7 @@ async function load() {
     initial.value = newExpenseFormState({
       myMemberId: loadedTrip.myMemberId,
       activeMemberIds: loadedMembers.filter((m) => m.status === 'active').map((m) => m.memberId),
-      currency: lastCurrency() ?? loadedTrip.displayCurrency,
+      currency: lastCurrency() ?? loadedTrip.defaultCurrency,
       timezone: loadedTrip.timezone,
       now: nowIn(loadedTrip.timezone),
     })

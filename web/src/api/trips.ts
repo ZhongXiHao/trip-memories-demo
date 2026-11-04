@@ -11,7 +11,7 @@ export interface TripView {
   startDate: string | null
   endDate: string | null
   timezone: string
-  displayCurrency: string
+  defaultCurrency: string
   /** 当前用户在这个行程里的成员 id 和角色，省得再去查成员列表 */
   myMemberId: number
   myRole: MemberRole
@@ -24,7 +24,7 @@ export interface TripView {
 export interface TripRequest {
   name: string
   description?: string | null
-  displayCurrency: string
+  defaultCurrency: string
   timezone: string
   startDate?: string | null
   endDate?: string | null

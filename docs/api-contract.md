@@ -64,7 +64,7 @@ Trip 对象：
 {
   "id": 1, "name": "東京五日遊", "description": null,
   "startDate": "2026-10-01", "endDate": "2026-10-05",
-  "timezone": "Asia/Tokyo", "displayCurrency": "HKD",
+  "timezone": "Asia/Tokyo", "defaultCurrency": "JPY",
   "myMemberId": 3, "myRole": "owner", "memberCount": 3, "createdAt": "2026-09-01T08:00:00Z"
 }
 ```
@@ -74,7 +74,7 @@ Trip 对象：
 ### Trip 本身操作
 
 1. 创建 trip：POST /trips
-   - 请求体：`name`（必填，≤ 128）、`displayCurrency`（必填，只用于显示概数，不写进任何账目）、`timezone`（必填，IANA，如 `Asia/Tokyo`，用来给支出默认时区和算第几天，所以不设默认值）、`description`、`startDate`、`endDate`（均可选，`endDate` 不能早于 `startDate`）。
+   - 请求体：`name`（必填，≤ 128）、`defaultCurrency`（必填，这趟旅行的默认币别，一般是当地货币，如东京之旅填 `JPY`；记账时客户端预先选它，规则指令没写币别时也取它。每笔支出仍各自记自己的币别）、`timezone`（必填，IANA，如 `Asia/Tokyo`，用来给支出默认时区和算第几天，所以不设默认值）、`description`、`startDate`、`endDate`（均可选，`endDate` 不能早于 `startDate`）。
    - 创建者自动成为 Owner 成员。响应 201，返回 Trip 对象。
 2. trip 详情：GET /trips/{tripId}（仅在籍成员）
 3. trip 修改：PUT /trips/{tripId}
@@ -410,7 +410,7 @@ Trip 对象：
 | warnings | 已解析成功、但用户该留意的事，结构同 issues |
 
 issues 的 code：`NOT_A_COMMAND`（不以 `/` 开头）、`UNKNOWN_COMMAND`、`COMMAND_NOT_AVAILABLE`、`MISSING_AMOUNT`、`AMBIGUOUS_AMOUNT`（出现多个金额）、`UNKNOWN_CURRENCY`、`AMOUNT_NOT_ROUNDABLE`、`MISSING_TITLE`、`UNKNOWN_MEMBER`、`AMBIGUOUS_MEMBER`（昵称重名）、`MEMBER_LEFT`。
-warnings 的 code：`CURRENCY_DEFAULTED`（没写币别，取 trip 展示币别）、`SPLIT_ALL_MEMBERS`（没写 `@`，全体均分）、`PAYER_ADDED_TO_SPLIT`（付款人不在 `@` 里，已自动加入）。
+warnings 的 code：`CURRENCY_DEFAULTED`（没写币别，取行程的默认币别 `defaultCurrency`）、`SPLIT_ALL_MEMBERS`（没写 `@`，全体均分）、`PAYER_ADDED_TO_SPLIT`（付款人不在 `@` 里，已自动加入）。
 
 ### `/pay` 的解析规则（规格 3.8.3）
 

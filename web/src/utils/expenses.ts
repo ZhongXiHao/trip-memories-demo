@@ -55,14 +55,14 @@ export interface CurrencyTotal {
 
 /**
  * 按币别分开的合计，不做换算（不同币别不能直接相加）。
- * 顺序固定，每天都一样：行程的展示币别排第一，其余按币别代码字母排序。
+ * 顺序固定，每天都一样：行程的默认币别排第一，其余按币别代码字母排序。
  */
-export function totalsByCurrency(expenses: ExpenseView[], displayCurrency?: string): CurrencyTotal[] {
+export function totalsByCurrency(expenses: ExpenseView[], defaultCurrency?: string): CurrencyTotal[] {
   const totals = new Map<string, number>()
   for (const { currency, amountMinor } of expenses) {
     totals.set(currency, (totals.get(currency) ?? 0) + amountMinor)
   }
-  const rank = (code: string) => (code === displayCurrency ? 0 : 1)
+  const rank = (code: string) => (code === defaultCurrency ? 0 : 1)
   return [...totals]
     .map(([currency, amountMinor]) => ({ currency, amountMinor }))
     .sort((a, b) => rank(a.currency) - rank(b.currency) || (a.currency < b.currency ? -1 : a.currency > b.currency ? 1 : 0))

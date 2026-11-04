@@ -16,7 +16,7 @@ record TripView(
         LocalDate startDate,
         LocalDate endDate,
         String timezone,
-        String displayCurrency,
+        String defaultCurrency,
         long myMemberId,
         MemberRole myRole,
         long memberCount,

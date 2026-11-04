@@ -60,8 +60,8 @@ public class TripService {
                 && request.endDate().isBefore(request.startDate())) {
             throw ApiException.validationFailed("endDate", "must not be before startDate");
         }
-        if (!currencyMapper.exists(request.displayCurrency())) {
-            throw ApiException.validationFailed("displayCurrency", "unsupported currency");
+        if (!currencyMapper.exists(request.defaultCurrency())) {
+            throw ApiException.validationFailed("defaultCurrency", "unsupported currency");
         }
         if (!ZoneId.getAvailableZoneIds().contains(request.timezone())) {
             throw ApiException.validationFailed("timezone", "must be an IANA time zone, e.g. Asia/Tokyo");

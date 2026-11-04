@@ -65,7 +65,7 @@ class MemberTransferRollbackTest {
     void failureWhilePromotingRollsBackTheDemotion() {
         long owner = user("r-owner");
         long target = user("r-target");
-        jdbc.update("INSERT INTO trip (name, timezone, display_currency, created_by) "
+        jdbc.update("INSERT INTO trip (name, timezone, default_currency, created_by) "
                 + "VALUES ('東京', 'Asia/Tokyo', 'HKD', ?)", owner);
         long tripId = jdbc.queryForObject("SELECT MAX(id) FROM trip", Long.class);
         jdbc.update("INSERT INTO trip_member (trip_id, user_id, role, status) VALUES (?, ?, 'owner', 'active')",
