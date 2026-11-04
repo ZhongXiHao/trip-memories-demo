@@ -10,6 +10,7 @@ import {
 } from '@/api/expenses'
 import type { MemberView } from '@/api/members'
 import CurrencyAmount from '@/components/CurrencyAmount.vue'
+import CurrencyChips from '@/components/CurrencyChips.vue'
 import { useCurrencyStore } from '@/stores/currencies'
 import {
   balanceText,
@@ -47,6 +48,8 @@ const props = defineProps<{
   previewing?: boolean
   submitting?: boolean
   confirmLabel: string
+  /** 金额下面的币别快捷选项（页面算好：默认币别、最近用过的）。完整列表在"更多币别"里 */
+  currencyOptions?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -74,10 +77,11 @@ const amountPlaceholder = computed(() => {
   return digits === 0 ? '0' : `0.${'0'.repeat(digits)}`
 })
 const currencyColumns = computed(() => currencies.items.map((c) => ({ text: `${c.code}　${c.name}`, value: c.code })))
-const currencyText = computed(() => {
-  const found = currencies.find(form.currency)
-  return found ? `${found.code}　${found.name}` : form.currency
-})
+const currencyName = computed(() => currencies.find(form.currency)?.name ?? '')
+// 只放币别列表里有的：列表回来之前不显示，免得点到一个用不了的币别
+const chipOptions = computed(() =>
+  currencies.loaded ? (props.currencyOptions ?? []).filter((code) => currencies.find(code)) : [],
+)
 
 async function loadCurrencies() {
   currencyLoadFailed.value = false
@@ -170,10 +174,14 @@ const showTimezone = ref(false)
 
 type PickerValue = { selectedValues: Array<string | number> }
 
-function onCurrencyConfirm({ selectedValues }: PickerValue) {
-  form.currency = String(selectedValues[0] ?? '')
+function setCurrency(code: string) {
+  form.currency = code
   errors.value.currency = undefined
   errors.value.amount = undefined
+}
+
+function onCurrencyConfirm({ selectedValues }: PickerValue) {
+  setCurrency(String(selectedValues[0] ?? ''))
   showCurrency.value = false
 }
 
@@ -264,17 +272,6 @@ const previewWarnings = computed(() => (Array.isArray(props.preview?.warnings) ?
         @update:model-value="errors.title = undefined"
       />
       <van-field
-        :model-value="currencyText"
-        label="币别"
-        :placeholder="currencyLoadFailed ? '币别没加载出来，点这里重试' : '选择币别'"
-        readonly
-        is-link
-        required
-        :error-message="errors.currency"
-        @click="currencyLoadFailed ? loadCurrencies() : (showCurrency = true)"
-        @keydown.enter.prevent="currencyLoadFailed ? loadCurrencies() : (showCurrency = true)"
-      />
-      <van-field
         v-model="form.amount"
         label="金额"
         type="number"
@@ -289,6 +286,34 @@ const previewWarnings = computed(() => (Array.isArray(props.preview?.warnings) ?
           <span class="amount-field__code tm-num">{{ form.currency }}</span>
         </template>
       </van-field>
+      <div class="block currency">
+        <p class="block__label">
+          币别<span v-if="currencyName" class="currency__name">{{ currencyName }}</span>
+        </p>
+        <div class="currency__row">
+          <button v-if="currencyLoadFailed" type="button" class="link-button" @click="loadCurrencies">
+            币别没加载出来，点这里重试
+          </button>
+          <template v-else>
+            <CurrencyChips
+              :options="chipOptions"
+              :selected="form.currency"
+              label="币别"
+              @select="setCurrency"
+            />
+            <button
+              type="button"
+              class="link-button"
+              aria-haspopup="dialog"
+              :disabled="!currencies.loaded"
+              @click="showCurrency = true"
+            >
+              更多币别
+            </button>
+          </template>
+        </div>
+        <p v-if="errors.currency" class="form-error">{{ errors.currency }}</p>
+      </div>
     </div>
 
     <div class="card">
@@ -493,6 +518,19 @@ const previewWarnings = computed(() => (Array.isArray(props.preview?.warnings) ?
   background: var(--tm-surface);
 }
 
+.currency__name {
+  margin-left: var(--tm-space-2);
+  color: var(--tm-muted);
+  font-weight: 400;
+}
+
+.currency__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tm-space-2);
+}
+
 .amount-field__code {
   color: var(--tm-muted);
   font-size: var(--tm-text-sm);
@@ -650,6 +688,11 @@ const previewWarnings = computed(() => (Array.isArray(props.preview?.warnings) ?
   font: inherit;
   font-size: var(--tm-text-sm);
   cursor: pointer;
+
+  &:disabled {
+    color: var(--tm-muted);
+    cursor: not-allowed;
+  }
 }
 
 .form-error {
