@@ -5,11 +5,12 @@ import { showToast } from 'vant'
 import 'vant/es/toast/style'
 
 import { describeError, toApiError } from '@/api/errors'
-import { createExpense, previewExpense, type ExpenseFields, type ExpensePreview } from '@/api/expenses'
+import { createExpense, listExpenses, previewExpense, type ExpenseFields, type ExpensePreview } from '@/api/expenses'
 import { listMembers, type MemberView } from '@/api/members'
 import { getTrip, type TripView } from '@/api/trips'
 import BoardHeader from '@/components/BoardHeader.vue'
 import ExpenseForm from '@/components/ExpenseForm.vue'
+import { currencyChoices, recentCurrencies } from '@/utils/currencyChoices'
 import { newExpenseFormState, serverFieldErrors, type ExpenseFormState } from '@/utils/expenseForm'
 import { showError } from '@/utils/toast'
 import { newClientUuid } from '@/utils/uuid'
@@ -30,6 +31,9 @@ const initial = ref<ExpenseFormState | null>(null)
 const preview = ref<ExpensePreview | null>(null)
 const previewing = ref(false)
 const submitting = ref(false)
+/** 这个行程里最近用过的币别（从已有的支出算） */
+const recent = ref<string[]>([])
+const currencyOptions = computed(() => currencyChoices(trip.value?.defaultCurrency, recent.value))
 
 // 幂等键：这次"记一笔"只生成一次。网络断了重试时沿用，后端认出是同一笔，不会记两次
 let clientUuid = newClientUuid()
@@ -55,8 +59,18 @@ function rememberCurrency(code: string) {
   }
 }
 
+// 快捷选项只是方便：不等它、取不到也不影响记账，只剩默认币别
+async function loadRecentCurrencies() {
+  try {
+    recent.value = recentCurrencies(await listExpenses(props.tripId))
+  } catch {
+    recent.value = []
+  }
+}
+
 async function load() {
   state.value = 'loading'
+  void loadRecentCurrencies()
   try {
     const [loadedTrip, loadedMembers] = await Promise.all([getTrip(props.tripId), listMembers(props.tripId)])
     trip.value = loadedTrip
@@ -169,6 +183,7 @@ async function onConfirm(fields: ExpenseFields) {
         :previewing="previewing"
         :submitting="submitting"
         confirm-label="确认记账"
+        :currency-options="currencyOptions"
         @preview="onPreview"
         @confirm="onConfirm"
         @invalidate="preview = null"

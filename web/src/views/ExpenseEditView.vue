@@ -7,6 +7,7 @@ import 'vant/es/toast/style'
 import { describeError, toApiError } from '@/api/errors'
 import {
   getExpense,
+  listExpenses,
   previewExpense,
   updateExpense,
   type ExpenseFields,
@@ -18,6 +19,7 @@ import { getTrip, type TripView } from '@/api/trips'
 import BoardHeader from '@/components/BoardHeader.vue'
 import ExpenseForm from '@/components/ExpenseForm.vue'
 import { useCurrencyStore } from '@/stores/currencies'
+import { currencyChoices, recentCurrencies } from '@/utils/currencyChoices'
 import { expenseToFormState, serverFieldErrors, type ExpenseFormState, type OriginalOccurred } from '@/utils/expenseForm'
 import { canModifyExpense } from '@/utils/expenses'
 import { showError } from '@/utils/toast'
@@ -43,6 +45,9 @@ const formKey = ref(0)
 const preview = ref<ExpensePreview | null>(null)
 const previewing = ref(false)
 const submitting = ref(false)
+/** 这个行程里最近用过的币别（从已有的支出算） */
+const recent = ref<string[]>([])
+const currencyOptions = computed(() => currencyChoices(trip.value?.defaultCurrency, recent.value))
 
 // 能选的人：在籍成员，加上这笔里原本就有的人（即使已经退出，也可以原样保留）
 const selectableMembers = computed(() => {
@@ -52,8 +57,18 @@ const selectableMembers = computed(() => {
   return members.value.filter((m) => m.status === 'active' || kept.has(m.memberId))
 })
 
+// 快捷选项只是方便：不等它、取不到也不影响修改，只剩默认币别和这笔原来的币别
+async function loadRecentCurrencies() {
+  try {
+    recent.value = recentCurrencies(await listExpenses(props.tripId))
+  } catch {
+    recent.value = []
+  }
+}
+
 async function load() {
   state.value = 'loading'
+  void loadRecentCurrencies()
   preview.value = null
   try {
     const [loadedTrip, loadedMembers, loadedExpense] = await Promise.all([
@@ -182,6 +197,7 @@ async function onConfirm(fields: ExpenseFields) {
         :previewing="previewing"
         :submitting="submitting"
         confirm-label="确认保存"
+        :currency-options="currencyOptions"
         @preview="onPreview"
         @confirm="onConfirm"
         @invalidate="preview = null"
