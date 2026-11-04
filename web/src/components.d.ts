@@ -21,6 +21,7 @@ declare module 'vue' {
     MoreMenu: typeof import('./components/MoreMenu.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    TripDebts: typeof import('./components/TripDebts.vue')['default']
     TripExpenses: typeof import('./components/TripExpenses.vue')['default']
     TripForm: typeof import('./components/TripForm.vue')['default']
     TripMembers: typeof import('./components/TripMembers.vue')['default']

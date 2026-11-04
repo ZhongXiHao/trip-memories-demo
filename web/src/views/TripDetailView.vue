@@ -18,6 +18,7 @@ import AddMemberPopup from '@/components/AddMemberPopup.vue'
 import BoardHeader from '@/components/BoardHeader.vue'
 import CurrencyTag from '@/components/CurrencyTag.vue'
 import MoreMenu from '@/components/MoreMenu.vue'
+import TripDebts from '@/components/TripDebts.vue'
 import TripExpenses from '@/components/TripExpenses.vue'
 import TripMembers from '@/components/TripMembers.vue'
 import { formatDateRange } from '@/utils/date'
@@ -29,7 +30,7 @@ import { timezoneLabel, timezoneShortLabel } from '@/utils/timezones'
 import { TRIP_TABS, queryWithTab, tabFromQuery, type TripTab } from '@/utils/tripTabs'
 import { showError } from '@/utils/toast'
 
-// 行程详情：页头是行程摘要（日期、展示币别、时区，负责人有标签），下面是支出、欠款（占位）和成员。
+// 行程详情：页头是行程摘要（日期、展示币别、时区，负责人有标签），下面是支出、欠款和成员。
 // 编辑、删除、退出行程都在页头的"⋯"菜单里（危险操作不常驻页面，见 DESIGN.md「按钮」）。
 // 手机：主体分成三个标签：支出 / 欠款 / 成员。当前标签写在地址的 ?tab= 里，刷新、从别的页面返回后还在原来的标签。
 // PC（≥ 960px）：不用标签，两栏同时显示（地址里的 ?tab= 不起作用，回到手机宽度时仍然有效）。
@@ -238,7 +239,7 @@ async function onQuit() {
         </div>
       </div>
 
-      <!-- PC：两栏，左边支出（宽），右边欠款占位和成员（窄）。"记一笔"在支出栏顶部 -->
+      <!-- PC：两栏，左边支出（宽），右边欠款和成员（窄）。"记一笔"在支出栏顶部 -->
       <div v-else-if="isDesktop" class="tm-container columns">
         <TripExpenses :trip-id="tripId" :members="members" :display-currency="trip.displayCurrency">
           <template #action>
@@ -248,10 +249,7 @@ async function onQuit() {
           </template>
         </TripExpenses>
         <aside class="side">
-          <section aria-labelledby="debts-title">
-            <h2 id="debts-title" class="side__title">欠款</h2>
-            <p class="soon">欠款和还款马上就做。</p>
-          </section>
+          <TripDebts :trip-id="tripId" :members="members" :my-member-id="trip.myMemberId" />
           <TripMembers
             :active="groups.active"
             :left="groups.left"
@@ -279,7 +277,12 @@ async function onQuit() {
                 :display-currency="trip.displayCurrency"
               />
 
-              <p v-else-if="tab.name === 'debts'" class="soon">欠款和还款马上就做。</p>
+              <TripDebts
+                v-else-if="tab.name === 'debts'"
+                :trip-id="tripId"
+                :members="members"
+                :my-member-id="trip.myMemberId"
+              />
 
               <TripMembers
                 v-else
@@ -363,15 +366,6 @@ async function onQuit() {
   gap: var(--tm-space-5);
 }
 
-.side__title {
-  display: flex;
-  align-items: center;
-  min-height: var(--tm-tap-min);
-  margin: 0 0 var(--tm-space-2);
-  font-size: var(--tm-text-md);
-  font-weight: 600;
-}
-
 .add-expense {
   padding: 0 var(--tm-space-5);
 }
@@ -446,14 +440,5 @@ async function onQuit() {
   -webkit-line-clamp: 2;
   line-clamp: 2;
   overflow-wrap: anywhere;
-}
-
-.soon {
-  margin: 0;
-  padding: var(--tm-space-4);
-  border: 1px dashed var(--tm-line);
-  border-radius: var(--tm-radius-card);
-  color: var(--tm-muted);
-  font-size: var(--tm-text-sm);
 }
 </style>
