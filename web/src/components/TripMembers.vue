@@ -96,12 +96,14 @@ function manageable(member: MemberView): boolean {
       </ul>
     </details>
 
+    <!-- 挂到 body：成员列表在可左右滑动的标签里，那里的 transform 会让 fixed 定位错位，菜单跑到屏幕外 -->
     <van-action-sheet
       v-model:show="showMenu"
       :title="target?.nickname"
       :actions="menuActions"
       cancel-text="取消"
       close-on-click-action
+      teleport="body"
       @select="onSelect"
     />
   </section>

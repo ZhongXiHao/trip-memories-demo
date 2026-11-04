@@ -15,6 +15,7 @@ import { isMemberLeft, memberName } from '@/utils/expenses'
 // 另一个视图是"建议转账"（simplify=true）：把 A 欠 B、B 欠 C 合并成 A 欠 C，按它转能让所有人结清。
 // 它只用于显示：pendingMinor 恒为 0，也不能据此记还款（还款按真实的一对一欠款校验额度），所以每条都标成"建议"，没有还款按钮。
 // 一对一的欠款里，我是欠款人可以"还款"（标记已还，等对方确认），我是债主可以"记收款"（直接生效）。
+// 还款弹层拿到一对一的列表，可以把同一对人、同一方向的几个币别放进一次转账里一起结清。
 const props = defineProps<{
   tripId: number
   /** 成员列表（包含已退出的），用来把 memberId 显示成昵称 */
@@ -193,6 +194,7 @@ defineExpose({ reload: load })
       v-model:show="showRepay"
       :trip-id="tripId"
       :debt="repayTarget"
+      :debts="simplified ? [] : debts"
       :members="members"
       :my-member-id="myMemberId"
       @created="onRepaid"
