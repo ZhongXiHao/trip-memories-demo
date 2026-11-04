@@ -12,7 +12,7 @@ import java.time.LocalDate;
 record TripRequest(
         @NotBlank @Size(max = 128) String name,
         @Size(max = 512) String description,
-        @NotBlank String displayCurrency,
+        @NotBlank String defaultCurrency,
         @NotBlank String timezone,
         LocalDate startDate,
         LocalDate endDate) {

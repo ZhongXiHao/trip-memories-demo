@@ -16,7 +16,7 @@ import {
 const valid: TripFormState = {
   name: '东京五日游',
   description: '',
-  displayCurrency: 'CNY',
+  defaultCurrency: 'CNY',
   timezone: 'Asia/Tokyo',
   startDate: '',
   endDate: '',
@@ -28,8 +28,8 @@ describe('validateTripForm', () => {
   })
 
   it('requires name, currency and time zone', () => {
-    const errors = validateTripForm({ ...valid, name: '   ', displayCurrency: '', timezone: '' })
-    expect(Object.keys(errors).sort()).toEqual(['displayCurrency', 'name', 'timezone'])
+    const errors = validateTripForm({ ...valid, name: '   ', defaultCurrency: '', timezone: '' })
+    expect(Object.keys(errors).sort()).toEqual(['defaultCurrency', 'name', 'timezone'])
   })
 
   it('enforces the length limits the backend enforces', () => {
@@ -54,7 +54,7 @@ describe('toTripRequest', () => {
     expect(toTripRequest({ ...valid, name: '  东京五日游 ', description: '  ' })).toEqual({
       name: '东京五日游',
       description: null,
-      displayCurrency: 'CNY',
+      defaultCurrency: 'CNY',
       timezone: 'Asia/Tokyo',
       startDate: null,
       endDate: null,
@@ -75,7 +75,7 @@ describe('tripToFormState', () => {
     startDate: null,
     endDate: null,
     timezone: 'Asia/Tokyo',
-    displayCurrency: 'JPY',
+    defaultCurrency: 'JPY',
     myMemberId: 3,
     myRole: 'owner',
     memberCount: 3,
@@ -86,7 +86,7 @@ describe('tripToFormState', () => {
     expect(tripToFormState(trip)).toEqual({
       name: '东京五日游',
       description: '',
-      displayCurrency: 'JPY',
+      defaultCurrency: 'JPY',
       timezone: 'Asia/Tokyo',
       startDate: '',
       endDate: '',
@@ -99,7 +99,7 @@ describe('tripToFormState', () => {
     expect(toTripRequest(tripToFormState(full))).toEqual({
       name: '东京五日游',
       description: '吃吃吃',
-      displayCurrency: 'JPY',
+      defaultCurrency: 'JPY',
       timezone: 'Asia/Tokyo',
       startDate: '2026-10-01',
       endDate: '2026-10-05',
@@ -116,10 +116,10 @@ describe('tripToFormState', () => {
 describe('serverFieldErrors', () => {
   it('maps backend field names back to form fields', () => {
     const error = new ApiError(400, 'VALIDATION_FAILED', 'x', [
-      { field: 'displayCurrency', message: 'unsupported currency' },
+      { field: 'defaultCurrency', message: 'unsupported currency' },
       { field: 'endDate', message: 'must not be before startDate' },
     ])
-    expect(Object.keys(serverFieldErrors(error)).sort()).toEqual(['displayCurrency', 'endDate'])
+    expect(Object.keys(serverFieldErrors(error)).sort()).toEqual(['defaultCurrency', 'endDate'])
   })
 
   it('ignores fields the form does not know', () => {

@@ -35,7 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class TripAccessTest {
 
     private static final String REPLACEMENT = """
-            {"name": "大阪三日遊", "description": "改了", "displayCurrency": "JPY", "timezone": "Asia/Tokyo",
+            {"name": "大阪三日遊", "description": "改了", "defaultCurrency": "JPY", "timezone": "Asia/Tokyo",
              "startDate": "2026-11-01", "endDate": "2026-11-03"}""";
 
     @Autowired
@@ -67,7 +67,7 @@ class TripAccessTest {
     }
 
     private long trip(long ownerId, String name, String createdAt) {
-        jdbc.update("INSERT INTO trip (name, timezone, display_currency, created_by, created_at) "
+        jdbc.update("INSERT INTO trip (name, timezone, default_currency, created_by, created_at) "
                 + "VALUES (?, 'Asia/Tokyo', 'HKD', ?, ?)", name, ownerId, createdAt);
         long tripId = jdbc.queryForObject("SELECT MAX(id) FROM trip", Long.class);
         member(tripId, ownerId, "owner", "active");
@@ -163,13 +163,13 @@ class TripAccessTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("大阪三日遊"))
                 .andExpect(jsonPath("$.description").value("改了"))
-                .andExpect(jsonPath("$.displayCurrency").value("JPY"))
+                .andExpect(jsonPath("$.defaultCurrency").value("JPY"))
                 .andExpect(jsonPath("$.startDate").value("2026-11-01"))
                 .andExpect(jsonPath("$.createdAt").value("2026-01-01T00:00:00Z"));
 
         // 整体替换：没传的可选字段会被清空，不是保留旧值
         putTrip(owner, tripId, """
-                {"name": "只剩名字", "displayCurrency": "HKD", "timezone": "UTC"}""")
+                {"name": "只剩名字", "defaultCurrency": "HKD", "timezone": "UTC"}""")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.description").doesNotExist())
                 .andExpect(jsonPath("$.startDate").doesNotExist())
@@ -200,11 +200,11 @@ class TripAccessTest {
         long tripId = trip(owner, "東京", "2026-01-01 00:00:00");
 
         putTrip(owner, tripId, """
-                {"name": "x", "displayCurrency": "XXX", "timezone": "UTC"}""")
+                {"name": "x", "defaultCurrency": "XXX", "timezone": "UTC"}""")
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.fields[0].field").value("displayCurrency"));
+                .andExpect(jsonPath("$.fields[0].field").value("defaultCurrency"));
         putTrip(owner, tripId, """
-                {"name": "x", "displayCurrency": "HKD", "timezone": "UTC",
+                {"name": "x", "defaultCurrency": "HKD", "timezone": "UTC",
                  "startDate": "2026-10-05", "endDate": "2026-10-01"}""")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fields[0].field").value("endDate"));

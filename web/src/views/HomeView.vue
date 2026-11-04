@@ -93,7 +93,7 @@ function newTrip() {
               <p v-if="trip.description" class="trip__description">{{ trip.description }}</p>
               <p class="trip__dates tm-num">{{ formatDateRange(trip.startDate, trip.endDate) }}</p>
               <div class="trip__meta">
-                <CurrencyTag :code="trip.displayCurrency" />
+                <CurrencyTag :code="trip.defaultCurrency" />
                 <span class="trip__tz">{{ timezoneLabel(trip.timezone) }}</span>
                 <!-- 旧版后端没有 memberCount 字段时不显示，免得出现"undefined 人" -->
                 <span v-if="typeof trip.memberCount === 'number'" class="trip__members">

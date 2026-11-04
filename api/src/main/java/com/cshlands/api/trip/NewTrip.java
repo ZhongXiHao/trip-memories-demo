@@ -13,7 +13,7 @@ class NewTrip {
     private Long id;
     private final String name;
     private final String description;
-    private final String displayCurrency;
+    private final String defaultCurrency;
     private final String timezone;
     private final LocalDate startDate;
     private final LocalDate endDate;
@@ -22,7 +22,7 @@ class NewTrip {
     NewTrip(TripRequest request, long createdBy) {
         this.name = request.name();
         this.description = request.description();
-        this.displayCurrency = request.displayCurrency();
+        this.defaultCurrency = request.defaultCurrency();
         this.timezone = request.timezone();
         this.startDate = request.startDate();
         this.endDate = request.endDate();

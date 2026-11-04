@@ -32,7 +32,7 @@ import { timezoneLabel, timezoneShortLabel } from '@/utils/timezones'
 import { TRIP_TABS, queryWithTab, tabFromQuery, type TripTab } from '@/utils/tripTabs'
 import { showError } from '@/utils/toast'
 
-// 行程详情：页头是行程摘要（日期、展示币别、时区，负责人有标签），下面是支出、欠款（含还款）和成员。
+// 行程详情：页头是行程摘要（日期、默认币别、时区，负责人有标签），下面是支出、欠款（含还款）和成员。
 // 编辑、删除、退出行程都在页头的"⋯"菜单里（危险操作不常驻页面，见 DESIGN.md「按钮」）。
 // 手机：主体分成三个标签：支出 / 欠款 / 成员。当前标签写在地址的 ?tab= 里，刷新、从别的页面返回后还在原来的标签。
 // PC（≥ 960px）：不用标签，两栏同时显示（地址里的 ?tab= 不起作用，回到手机宽度时仍然有效）。
@@ -232,7 +232,7 @@ async function onQuit() {
         <p class="summary">
           <span>{{ formatDateRange(trip.startDate, trip.endDate) }}</span>
           <span class="summary__sep" aria-hidden="true">·</span>
-          <CurrencyTag :code="trip.displayCurrency" />
+          <CurrencyTag :code="trip.defaultCurrency" />
           <span class="summary__sep" aria-hidden="true">·</span>
           <span class="summary__zone" :title="timezoneLabel(trip.timezone)" :aria-label="`时区 ${timezoneLabel(trip.timezone)}`">
             <van-icon name="clock-o" aria-hidden="true" />{{ timezoneShortLabel(trip.timezone) }}
@@ -266,7 +266,7 @@ async function onQuit() {
 
       <!-- PC：两栏，左边支出（宽），右边欠款和成员（窄）。"记一笔"在支出栏顶部 -->
       <div v-else-if="isDesktop" class="tm-container columns">
-        <TripExpenses :trip-id="tripId" :members="members" :display-currency="trip.displayCurrency">
+        <TripExpenses :trip-id="tripId" :members="members" :default-currency="trip.defaultCurrency">
           <template #action>
             <van-button type="primary" icon="plus" class="add-expense" :disabled="busy" @click="goNewExpense">
               记一笔
@@ -304,7 +304,7 @@ async function onQuit() {
                 v-if="tab.name === 'expenses'"
                 :trip-id="tripId"
                 :members="members"
-                :display-currency="trip.displayCurrency"
+                :default-currency="trip.defaultCurrency"
               />
 
               <TripSettlement

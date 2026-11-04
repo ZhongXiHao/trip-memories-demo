@@ -27,13 +27,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{ submit: [request: TripRequest] }>()
 
-// 展示币别只用来显示概数，不写进任何账目；新建时默认人民币，用户可改
+// 默认币别：记一笔时预先选好它（如东京之旅选 JPY）；新建时默认人民币，用户可改
 const DEFAULT_CURRENCY = 'CNY'
 
 const form = reactive<TripFormState>({
   name: '',
   description: '',
-  displayCurrency: '',
+  defaultCurrency: '',
   timezone: '',
   startDate: '',
   endDate: '',
@@ -48,17 +48,17 @@ const currencyColumns = computed(() =>
   currencies.value.map((c) => ({ text: `${c.code}　${c.name}`, value: c.code })),
 )
 const currencyText = computed(() => {
-  const found = currencies.value.find((c) => c.code === form.displayCurrency)
+  const found = currencies.value.find((c) => c.code === form.defaultCurrency)
   // 币别列表还没回来时，先显示代码，不要让已有的值看起来像"没选"
-  return found ? `${found.code}　${found.name}` : form.displayCurrency
+  return found ? `${found.code}　${found.name}` : form.defaultCurrency
 })
 
 async function loadCurrencies() {
   currencyLoadFailed.value = false
   try {
     currencies.value = await listCurrencies()
-    if (!form.displayCurrency) {
-      form.displayCurrency = currencies.value.some((c) => c.code === DEFAULT_CURRENCY)
+    if (!form.defaultCurrency) {
+      form.defaultCurrency = currencies.value.some((c) => c.code === DEFAULT_CURRENCY)
         ? DEFAULT_CURRENCY
         : (currencies.value[0]?.code ?? '')
     }
@@ -87,8 +87,8 @@ const timezoneColumns = computed(() => {
 const timezoneText = computed(() => (form.timezone ? timezoneLabel(form.timezone) : ''))
 
 function onCurrencyConfirm({ selectedValues }: { selectedValues: Array<string | number> }) {
-  form.displayCurrency = String(selectedValues[0] ?? '')
-  errors.value.displayCurrency = undefined
+  form.defaultCurrency = String(selectedValues[0] ?? '')
+  errors.value.defaultCurrency = undefined
   showCurrency.value = false
 }
 
@@ -207,19 +207,19 @@ defineExpose({ showErrors })
       </div>
       <van-field
         :model-value="currencyText"
-        label="展示币别"
+        label="默认币别"
         :placeholder="currencyLoadFailed ? '币别没加载出来，点这里重试' : '选择币别'"
         readonly
         is-link
         required
-        :error-message="errors.displayCurrency"
+        :error-message="errors.defaultCurrency"
         @click="currencyLoadFailed ? loadCurrencies() : (showCurrency = true)"
         @keydown.enter.prevent="currencyLoadFailed ? loadCurrencies() : (showCurrency = true)"
       />
     </div>
 
     <p class="hint">
-      时区决定每笔支出默认的当地时间和“第几天”，选目的地所在的时区。展示币别只用来显示概数，不会写进任何账目。
+      时区决定每笔支出默认的当地时间和“第几天”，选目的地所在的时区。默认币别是记一笔时预先选好的币别，一般选当地货币，每笔都可以改。
     </p>
 
     <van-button type="primary" block native-type="submit" :loading="submitting" :disabled="currencyLoadFailed">
@@ -228,9 +228,9 @@ defineExpose({ showErrors })
 
     <van-popup v-model:show="showCurrency" position="bottom" round>
       <van-picker
-        title="展示币别"
+        title="默认币别"
         :columns="currencyColumns"
-        :model-value="form.displayCurrency ? [form.displayCurrency] : []"
+        :model-value="form.defaultCurrency ? [form.defaultCurrency] : []"
         @confirm="onCurrencyConfirm"
         @cancel="showCurrency = false"
       />

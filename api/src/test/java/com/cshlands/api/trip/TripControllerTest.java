@@ -65,7 +65,7 @@ class TripControllerTest {
     }
 
     private static final String VALID = """
-            {"name": "東京五日遊", "displayCurrency": "HKD", "timezone": "Asia/Tokyo",
+            {"name": "東京五日遊", "defaultCurrency": "HKD", "timezone": "Asia/Tokyo",
              "startDate": "2026-10-01", "endDate": "2026-10-05"}""";
 
     @Test
@@ -77,7 +77,7 @@ class TripControllerTest {
                 .andExpect(jsonPath("$.startDate").value("2026-10-01"))
                 .andExpect(jsonPath("$.endDate").value("2026-10-05"))
                 .andExpect(jsonPath("$.timezone").value("Asia/Tokyo"))
-                .andExpect(jsonPath("$.displayCurrency").value("HKD"))
+                .andExpect(jsonPath("$.defaultCurrency").value("HKD"))
                 .andExpect(jsonPath("$.myRole").value("owner"))
                 .andExpect(jsonPath("$.memberCount").value(1))
                 .andReturn().getResponse().getContentAsString();
@@ -100,7 +100,7 @@ class TripControllerTest {
     @Test
     void clientCannotChooseIdOrCreator() throws Exception {
         String body = createTrip("""
-                {"id": 999999, "createdBy": 1, "name": "x", "displayCurrency": "HKD", "timezone": "UTC"}""")
+                {"id": 999999, "createdBy": 1, "name": "x", "defaultCurrency": "HKD", "timezone": "UTC"}""")
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
 
@@ -113,17 +113,17 @@ class TripControllerTest {
     @Test
     void unknownCurrencyIsValidationFailed() throws Exception {
         createTrip("""
-                {"name": "x", "displayCurrency": "XXX", "timezone": "UTC"}""")
+                {"name": "x", "defaultCurrency": "XXX", "timezone": "UTC"}""")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
-                .andExpect(jsonPath("$.fields[0].field").value("displayCurrency"));
+                .andExpect(jsonPath("$.fields[0].field").value("defaultCurrency"));
         assertNoTripCreated();
     }
 
     @Test
     void invalidTimezoneIsValidationFailed() throws Exception {
         createTrip("""
-                {"name": "x", "displayCurrency": "HKD", "timezone": "Mars/Base"}""")
+                {"name": "x", "defaultCurrency": "HKD", "timezone": "Mars/Base"}""")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.fields[0].field").value("timezone"));
@@ -133,7 +133,7 @@ class TripControllerTest {
     @Test
     void endDateBeforeStartDateIsValidationFailed() throws Exception {
         createTrip("""
-                {"name": "x", "displayCurrency": "HKD", "timezone": "UTC",
+                {"name": "x", "defaultCurrency": "HKD", "timezone": "UTC",
                  "startDate": "2026-10-05", "endDate": "2026-10-01"}""")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
@@ -149,7 +149,7 @@ class TripControllerTest {
                 .andReturn().getResponse().getContentAsString();
 
         List<String> fields = JsonPath.read(body, "$.fields[*].field");
-        assertThat(fields).containsExactlyInAnyOrder("name", "displayCurrency", "timezone");
+        assertThat(fields).containsExactlyInAnyOrder("name", "defaultCurrency", "timezone");
     }
 
     @Test

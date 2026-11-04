@@ -10,7 +10,7 @@ export const DESCRIPTION_MAX = 512
 export interface TripFormState {
   name: string
   description: string
-  displayCurrency: string
+  defaultCurrency: string
   timezone: string
   /** "YYYY-MM-DD"，没选是空字符串 */
   startDate: string
@@ -26,7 +26,7 @@ export function validateTripForm(form: TripFormState): TripFormErrors {
   if (!name) errors.name = '请填写行程名称'
   else if (name.length > NAME_MAX) errors.name = `行程名称最多 ${NAME_MAX} 个字`
   if (form.description.trim().length > DESCRIPTION_MAX) errors.description = `备注最多 ${DESCRIPTION_MAX} 个字`
-  if (!form.displayCurrency) errors.displayCurrency = '请选择展示币别'
+  if (!form.defaultCurrency) errors.defaultCurrency = '请选择默认币别'
   if (!form.timezone) errors.timezone = '请选择目的地时区'
   if (form.startDate && form.endDate && tripDays(form.startDate, form.endDate) === null) {
     errors.endDate = '结束日期不能早于开始日期'
@@ -40,7 +40,7 @@ export function toTripRequest(form: TripFormState): TripRequest {
   return {
     name: form.name.trim(),
     description: description || null,
-    displayCurrency: form.displayCurrency,
+    defaultCurrency: form.defaultCurrency,
     timezone: form.timezone,
     startDate: form.startDate || null,
     endDate: form.endDate || null,
@@ -50,7 +50,7 @@ export function toTripRequest(form: TripFormState): TripRequest {
 const SERVER_FIELD_MESSAGES: Record<string, { field: keyof TripFormState; message: string }> = {
   name: { field: 'name', message: `行程名称不合法，最多 ${NAME_MAX} 个字` },
   description: { field: 'description', message: `备注最多 ${DESCRIPTION_MAX} 个字` },
-  displayCurrency: { field: 'displayCurrency', message: '这个币别不支持，请重新选择' },
+  defaultCurrency: { field: 'defaultCurrency', message: '这个币别不支持，请重新选择' },
   timezone: { field: 'timezone', message: '这个时区不合法，请重新选择' },
   endDate: { field: 'endDate', message: '结束日期不能早于开始日期' },
   startDate: { field: 'endDate', message: '开始日期不合法' },
@@ -71,7 +71,7 @@ export function tripToFormState(trip: TripView): TripFormState {
   return {
     name: trip.name,
     description: trip.description ?? '',
-    displayCurrency: trip.displayCurrency,
+    defaultCurrency: trip.defaultCurrency,
     timezone: trip.timezone,
     startDate: trip.startDate ?? '',
     endDate: trip.endDate ?? '',

@@ -123,7 +123,7 @@ describe('totalsByCurrency', () => {
     ])
   })
 
-  it('puts the display currency first and sorts the rest by code', () => {
+  it('puts the default currency first and sorts the rest by code', () => {
     expect(totalsByCurrency(list, 'KRW').map((t) => t.currency)).toEqual(['KRW', 'HKD', 'JPY'])
   })
 
@@ -133,7 +133,7 @@ describe('totalsByCurrency', () => {
     expect(new Set(seen)).toEqual(new Set(['JPY,HKD,KRW']))
   })
 
-  it('sorts by code alone when the display currency is not spent that day or not given', () => {
+  it('sorts by code alone when the default currency is not spent that day or not given', () => {
     expect(totalsByCurrency(list, 'CNY').map((t) => t.currency)).toEqual(['HKD', 'JPY', 'KRW'])
     expect(totalsByCurrency(list).map((t) => t.currency)).toEqual(['HKD', 'JPY', 'KRW'])
   })
