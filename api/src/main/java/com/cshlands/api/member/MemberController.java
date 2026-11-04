@@ -19,9 +19,11 @@ import org.springframework.web.bind.annotation.RestController;
 class MemberController {
 
     private final MemberService memberService;
+    private final MemberLeaveService memberLeaveService;
 
-    MemberController(MemberService memberService) {
+    MemberController(MemberService memberService, MemberLeaveService memberLeaveService) {
         this.memberService = memberService;
+        this.memberLeaveService = memberLeaveService;
     }
 
     /**
@@ -36,12 +38,12 @@ class MemberController {
 
     @PostMapping("/members/me/quit")
     MemberChangeResult quit(@PathVariable long tripId) {
-        return memberService.quit(CurrentUser.id(), tripId);
+        return memberLeaveService.quit(CurrentUser.id(), tripId);
     }
 
     @PostMapping("/members/{memberId}/remove")
     MemberChangeResult remove(@PathVariable long tripId, @PathVariable long memberId) {
-        return memberService.remove(CurrentUser.id(), tripId, memberId);
+        return memberLeaveService.remove(CurrentUser.id(), tripId, memberId);
     }
 
     /** ?status=active 或 left 过滤；不传则全部 */
