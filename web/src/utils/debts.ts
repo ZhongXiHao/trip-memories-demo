@@ -23,3 +23,21 @@ export function sortDebtsForMe(debts: DebtView[], myMemberId: number): DebtView[
 export function debtKey(debt: DebtView): string {
   return `${debt.fromMemberId}-${debt.toMemberId}-${debt.currency}`
 }
+
+/**
+ * 现在还能还多少：amountMinor 减去同方向已经标记、还没确认的（不足 0 按 0）。
+ * 和后端创建还款时的额度一致，超过会是 REPAYMENT_EXCEEDS_DEBT。
+ */
+export function repayableMinor(debt: DebtView): number {
+  return Math.max(0, debt.amountMinor - debt.pendingMinor)
+}
+
+/**
+ * 我能不能从这条欠款记一笔还款、以什么身份：付款方（标记已还，等对方确认）、收款方（直接记已收到），
+ * 和我无关的是 null（后端 403）。只能用于真实的一对一欠款，化简出来的"建议转账"不能据此创建还款。
+ */
+export function repayRole(debt: DebtView, myMemberId: number): 'payer' | 'receiver' | null {
+  if (debt.fromMemberId === myMemberId) return 'payer'
+  if (debt.toMemberId === myMemberId) return 'receiver'
+  return null
+}

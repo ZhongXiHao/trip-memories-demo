@@ -19,6 +19,7 @@ declare module 'vue' {
     CurrencyTag: typeof import('./components/CurrencyTag.vue')['default']
     ExpenseForm: typeof import('./components/ExpenseForm.vue')['default']
     MoreMenu: typeof import('./components/MoreMenu.vue')['default']
+    RepaymentPopup: typeof import('./components/RepaymentPopup.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     TripDebts: typeof import('./components/TripDebts.vue')['default']

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { DebtView } from '@/api/debts'
 
-import { debtKey, debtSide, sortDebtsForMe } from '../debts'
+import { debtKey, debtSide, repayableMinor, repayRole, sortDebtsForMe } from '../debts'
 
 function debt(from: number, to: number, currency = 'JPY', amountMinor = 100000, pendingMinor = 0): DebtView {
   return { fromMemberId: from, toMemberId: to, currency, amountMinor, pendingMinor }
@@ -29,5 +29,25 @@ describe('sortDebtsForMe', () => {
     const list = [debt(1, 2), debt(3, 1)]
     sortDebtsForMe(list, 3)
     expect(list.map(debtKey)).toEqual(['1-2-JPY', '3-1-JPY'])
+  })
+})
+
+describe('repayableMinor', () => {
+  it('subtracts what is already marked as paid but not confirmed yet', () => {
+    expect(repayableMinor(debt(5, 3, 'JPY', 340000, 100000))).toBe(240000)
+    expect(repayableMinor(debt(5, 3, 'JPY', 340000, 0))).toBe(340000)
+  })
+
+  it('never goes below zero, even when the pending repayments exceed the debt', () => {
+    // 支出被删之后，待确认的可能比现在的欠款还多
+    expect(repayableMinor(debt(5, 3, 'JPY', 100000, 340000))).toBe(0)
+  })
+})
+
+describe('repayRole', () => {
+  it('lets the debtor mark it paid and the creditor record it received, and nobody else', () => {
+    expect(repayRole(debt(5, 3), 5)).toBe('payer')
+    expect(repayRole(debt(5, 3), 3)).toBe('receiver')
+    expect(repayRole(debt(5, 3), 7)).toBeNull()
   })
 })

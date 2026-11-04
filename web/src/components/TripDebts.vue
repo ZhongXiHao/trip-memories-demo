@@ -5,19 +5,26 @@ import { listDebts, type DebtView } from '@/api/debts'
 import { describeError, toApiError } from '@/api/errors'
 import type { MemberView } from '@/api/members'
 import CurrencyAmount from '@/components/CurrencyAmount.vue'
-import { debtKey, debtSide, sortDebtsForMe } from '@/utils/debts'
+import RepaymentPopup from '@/components/RepaymentPopup.vue'
+import { debtKey, debtSide, repayableMinor, repayRole, sortDebtsForMe } from '@/utils/debts'
 import { isMemberLeft, memberName } from '@/utils/expenses'
 
 // 行程页里的欠款总览：每两人之间、按币别分开的一对一净额（不换算、不跨币别互抵）。
 // 我欠的排最前，然后是欠我的，最后是别人之间的。"你欠"用实心标签、"欠你"用描边标签，不靠颜色区分（见 DESIGN.md）。
 // 待确认的还款不抵债，另外写出来。列表自己取数据、自己处理加载失败。
 // 另一个视图是"建议转账"（simplify=true）：把 A 欠 B、B 欠 C 合并成 A 欠 C，按它转能让所有人结清。
-// 它只用于显示：pendingMinor 恒为 0，也不能据此记还款（还款按真实的一对一欠款校验额度），所以每条都标成"建议"。
+// 它只用于显示：pendingMinor 恒为 0，也不能据此记还款（还款按真实的一对一欠款校验额度），所以每条都标成"建议"，没有还款按钮。
+// 一对一的欠款里，我是欠款人可以"还款"（标记已还，等对方确认），我是债主可以"记收款"（直接生效）。
 const props = defineProps<{
   tripId: number
   /** 成员列表（包含已退出的），用来把 memberId 显示成昵称 */
   members: MemberView[]
   myMemberId: number
+}>()
+
+const emit = defineEmits<{
+  /** 记了一笔还款：外面的还款列表要刷新 */
+  repaid: []
 }>()
 
 type State = 'loading' | 'ready' | 'error'
@@ -35,7 +42,12 @@ const viewOptions: ReadonlyArray<{ value: View; label: string }> = [
 ]
 const simplified = computed(() => view.value === 'simplified')
 
-const rows = computed(() => sortDebtsForMe(debts.value, props.myMemberId))
+/** 一条欠款右下角的操作：可以记还款（按钮），或者已经全部标记过（只显示文字） */
+type RepayAction = { kind: 'repay'; label: string } | { kind: 'done'; label: string }
+
+const rows = computed(() =>
+  sortDebtsForMe(debts.value, props.myMemberId).map((debt) => ({ debt, action: repayAction(debt) })),
+)
 
 // 同时有两次加载（比如连续切换筛选）时，只用最后一次的结果
 let loadSeq = 0
@@ -81,6 +93,30 @@ const emptyText = computed(() => {
   return '大家都结清了。'
 })
 
+// 记还款的弹层：从哪一条欠款打开
+const repayTarget = ref<DebtView | null>(null)
+const showRepay = ref(false)
+
+function openRepay(debt: DebtView) {
+  repayTarget.value = debt
+  showRepay.value = true
+}
+
+/** 这一条能不能、以什么文字记还款。化简视图里一律不能；我不是欠款人或债主时不能 */
+function repayAction(debt: DebtView): RepayAction | null {
+  if (simplified.value) return null
+  const role = repayRole(debt, props.myMemberId)
+  if (!role) return null
+  // 已经全部标记过（等确认）：不能再记，到还款列表里确认或取消
+  if (repayableMinor(debt) === 0) return { kind: 'done', label: '已全部标记' }
+  return { kind: 'repay', label: role === 'payer' ? '还款' : '记收款' }
+}
+
+function onRepaid() {
+  void load()
+  emit('repaid')
+}
+
 defineExpose({ reload: load })
 </script>
 
@@ -122,7 +158,7 @@ defineExpose({ reload: load })
     <p v-else-if="rows.length === 0" class="empty">{{ emptyText }}</p>
 
     <ul v-else class="list">
-      <li v-for="debt in rows" :key="debtKey(debt)" class="debt">
+      <li v-for="{ debt, action } in rows" :key="debtKey(debt)" class="debt">
         <div class="debt__text">
           <span class="debt__pair">
             <span v-if="simplified" class="tag tag--quiet">建议</span>
@@ -137,9 +173,31 @@ defineExpose({ reload: load })
         </div>
         <div class="debt__side">
           <CurrencyAmount :amount-minor="debt.amountMinor" :currency="debt.currency" />
+          <span v-if="action?.kind === 'done'" class="debt__done">{{ action.label }}</span>
+          <van-button
+            v-else-if="action?.kind === 'repay'"
+            size="small"
+            plain
+            type="primary"
+            class="tm-button-secondary"
+            :aria-label="`${action.label}：${pairText(debt)}`"
+            @click="openRepay(debt)"
+          >
+            {{ action.label }}
+          </van-button>
         </div>
       </li>
     </ul>
+
+    <RepaymentPopup
+      v-model:show="showRepay"
+      :trip-id="tripId"
+      :debt="repayTarget"
+      :members="members"
+      :my-member-id="myMemberId"
+      @created="onRepaid"
+      @stale="onRepaid"
+    />
   </section>
 </template>
 
@@ -278,6 +336,11 @@ defineExpose({ reload: load })
   flex-wrap: wrap;
   align-items: center;
   gap: var(--tm-space-1) var(--tm-space-2);
+  color: var(--tm-muted);
+  font-size: var(--tm-text-xs);
+}
+
+.debt__done {
   color: var(--tm-muted);
   font-size: var(--tm-text-xs);
 }
