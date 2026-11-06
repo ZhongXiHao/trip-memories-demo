@@ -376,7 +376,7 @@ Trip 对象：
 
 1. 解析指令：POST /trips/{tripId}/commands/parse
 
-请求体：`{"input": "/pay 1200jpy 拉麵 @Ken @Amy"}`，`input` 必填，≤ 500 字符，空串返回 400 `VALIDATION_FAILED`。
+请求体：`{"input": "/pay 1200jpy 拉麵 @Ken @Amy"}`，`input` 必填，≤ 500 字符（按字符串长度算），缺失、空串或只有空白返回 400 `VALIDATION_FAILED`（`fields` 指向 `input`）。不是在籍成员 404。
 
 响应（解析失败也是 200：失败是正常结果，评测要统计；只有请求本身不合法才是 4xx）：
 
@@ -389,6 +389,7 @@ Trip 对象：
     "title": "拉麵", "amountMinor": 120000, "currency": "JPY",
     "paidByMemberId": 3, "splitMode": "equal",
     "splits": [{"memberId": 3}, {"memberId": 5}, {"memberId": 7}],
+    "occurredAt": null, "occurredTz": null,
     "source": "command"
   },
   "preview": { "同「记账预览」的响应" },
@@ -401,28 +402,47 @@ Trip 对象：
 | 字段 | 说明 |
 |---|---|
 | status | `ok` 可以直接预览确认；`failed` 有无法识别的部分；`unsupported` 指令认得但还没开放 |
-| command | 别名归一后的名字（`pay` `owe` `today`…）；认不出为 null |
-| kind | `expense`（产出支出草稿）或 `view`（查看类，不产出草稿） |
-| draft | 请求体同「创建支出」，不含 `clientUuid`。`failed` 时是已识别出的部分（可能缺字段），给前端「改用表单」带入；`kind=view` 时为 null |
-| preview | 同「记账预览」的响应；仅 `status=ok` 时有 |
-| view | `kind=view` 时给出要看什么：`debts`（调欠款总览）或 `today_expenses`（调支出列表，`date` 为今天） |
-| issues | 无法识别的部分，每项 `{code, text, message}`，`text` 是输入里对应的原文片段 |
-| warnings | 已解析成功、但用户该留意的事，结构同 issues |
+| command | 别名归一后的名字（`pay` `owe` `today` `todo`…）；不是指令、认不出时为 null |
+| kind | `expense`（产出支出草稿）或 `view`（查看类，不产出草稿）；不是指令、认不出、暂未开放时为 null |
+| draft | 只在 `kind=expense` 时有，其余为 null。请求体同「创建支出」，不含 `clientUuid`，字段为 `title` `amountMinor` `currency` `paidByMemberId` `splitMode` `splits` `occurredAt` `occurredTz` `source`，字段总是都在。`failed` 时是已识别出的部分，没识别出的字段为 null，给前端「改用表单」带入 |
+| preview | 同「记账预览」的响应；仅 `status=ok` 且 `kind=expense` 时有，否则为 null |
+| view | `kind=view` 时给出要看什么：`debts`（调欠款总览）或 `today_expenses`（调支出列表，`date` 为今天）；否则为 null |
+| issues | 无法识别的部分，每项 `{code, text, message}`，`text` 是输入里对应的原文片段，没有对应片段时（`MISSING_AMOUNT`、`MISSING_TITLE`）为 null。几处互不相干的问题（金额、成员、标题）各报各的；顺序不保证 |
+| warnings | 用户该留意的事，结构同 issues；`status=failed` 时也照常给出 |
 
-issues 的 code：`NOT_A_COMMAND`（不以 `/` 开头）、`UNKNOWN_COMMAND`、`COMMAND_NOT_AVAILABLE`、`MISSING_AMOUNT`、`AMBIGUOUS_AMOUNT`（出现多个金额）、`UNKNOWN_CURRENCY`、`AMOUNT_NOT_ROUNDABLE`、`MISSING_TITLE`、`UNKNOWN_MEMBER`、`AMBIGUOUS_MEMBER`（昵称重名）、`MEMBER_LEFT`。
-warnings 的 code：`CURRENCY_DEFAULTED`（没写币别，取行程的默认币别 `defaultCurrency`）、`SPLIT_ALL_MEMBERS`（没写 `@`，全体均分）、`PAYER_ADDED_TO_SPLIT`（付款人不在 `@` 里，已自动加入）。
+顶层这 8 个字段总是都在，没有值的为 null，`issues`、`warnings` 没有时是空数组。
+
+issues 的 code：`NOT_A_COMMAND`（不以 `/` 开头）、`UNKNOWN_COMMAND`、`COMMAND_NOT_AVAILABLE`、`MISSING_AMOUNT`、`AMBIGUOUS_AMOUNT`（出现多个金额）、`UNKNOWN_CURRENCY`、`AMOUNT_NOT_ROUNDABLE`、`INVALID_AMOUNT`（金额为 0 或超出范围）、`MISSING_TITLE`、`TITLE_TOO_LONG`（超过 128 字符）、`UNKNOWN_MEMBER`、`AMBIGUOUS_MEMBER`（昵称重名）、`MEMBER_LEFT`、`AMBIGUOUS_PAYER`（指定了两个付款人）。
+warnings 的 code：
+- `CURRENCY_DEFAULTED`：没写币别，取行程的默认币别 `defaultCurrency`。`text` 是那个数字。
+- `SPLIT_ALL_MEMBERS`：除了指定付款人的那个 `@`，没写任何 `@`，全体在籍成员均分。`text` 为 null。
+- `PAYER_ADDED_TO_SPLIT`：用 `by` / `由` 指定的付款人不在其余的 `@` 里，已自动加入分摊。`text` 是付款人的那个 `@` 词（如 `@Ken`）。付款人是自己（没有指定）时，自己总会加入分摊，不提示。
+
+### 指令的识别
+
+- 先去掉首尾空白。全角的 `／`、`＠` 和全角空格当作半角处理；全角数字、字母不认。
+- 输入按空白切成「词」，下面的规则都以词为单位。
+- 不以 `/` 开头 → `NOT_A_COMMAND`，`text` 是去掉首尾空白后的整个输入。
+- 第一个词是指令名，大小写不限。认不出 → `UNKNOWN_COMMAND`，`text` 是这个词。`/pay1200jpy` 是一个词，不是 `/pay`。
 
 ### `/pay` 的解析规则（规格 3.8.3）
 
-别名：`/记账` `/記帳`。参数顺序不限，按下面的规则从输入里依次取走，剩下的文字就是 `title`。
+别名：`/记账` `/記帳`。参数顺序不限，按下面的规则从输入里依次取走，剩下的词用一个空格连接就是 `title`。
 
-- 金额币别：数字紧挨一个 3 位币别码，大小写不限（`1200jpy`、`jpy1200`），数字可带千分位逗号和最多 2 位小数。金额按币别 ×100 换成 `amountMinor`，并检查是 `roundingUnit` 的整数倍。
-  v1 不认 `¥` `$` 这类符号（`¥` 既可能是日元也可能是人民币），遇到按 `UNKNOWN_CURRENCY` 处理。
-- 付款人：默认是自己；`由 @成员` 或 `by @成员` 指定别人。
-- 分摊者：其余的 `@成员` 加上付款人，平均分摊（`splitMode = equal`）；没写任何 `@` 则全体在籍成员均分。
-- 成员匹配：`@` 后面的名字和本行程在籍成员的昵称做精确匹配，忽略大小写。匹配不到或重名都不猜，进 `issues`。
-  这是基线刻意保持的笨：模糊匹配、别名、「阿 Ken」这类叫法留给 Agent 去做，E1 评测靠这个差距体现 Agent 的价值。
-- 不支持：逐人指定金额、个人支出（`none`）、日期时间、类别。要这些请用表单。`occurredAt` 取现在，`occurredTz` 取 trip 时区，`category = other`。
+- **金额币别**：整个词是金额才算。数字紧挨一个 3 位币别码，大小写不限，码在前在后都行（`1200jpy`、`JPY1,200`）；或者只有数字（`1200`）。数字可带千分位逗号（必须三位一组）和小数。`拉麵1200jpy`、`12,00jpy` 不是金额，留在标题里。
+  - 只有数字时取行程的 `defaultCurrency`，提示 `CURRENCY_DEFAULTED`。数字和币别码用空白隔开（`1200 jpy`）也按这条处理：`jpy` 留在标题里。
+  - 币别码不在币别列表里（`1200abc`），或数字前后带了 `¥` `￥` `$` `€` `£` `₩` `円` `元` → `UNKNOWN_CURRENCY`。v1 不认符号（`¥` 既可能是日元也可能是人民币）。
+  - 金额按币别 ×100 换成 `amountMinor`。超过两位小数、或不是 `roundingUnit` 的整数倍 → `AMOUNT_NOT_ROUNDABLE`；为 0 或超出范围 → `INVALID_AMOUNT`。
+  - 两个以上金额（只有数字的、带符号的都算）→ 每个各一条 `AMBIGUOUS_AMOUNT`，不再另报其中的 `UNKNOWN_CURRENCY`。
+  - 金额没取到（缺失或有上面的问题）时，`draft` 的 `amountMinor`、`currency` 都是 null，也不提示 `CURRENCY_DEFAULTED`。
+- **点名**：以 `@` 开头的词，`@Ken@Amy` 算两个。名字到空白或下一个 `@` 为止，标点也算名字的一部分（`@Ken，` 匹配不到）。词中间的 `@`（`a@b`）是普通文字。昵称里有空格的成员不能用指令点名。
+- **成员匹配**：名字和本行程成员的昵称做精确匹配，忽略大小写。在籍成员里恰好一个 → 命中；两个以上 → `AMBIGUOUS_MEMBER`；在籍成员里没有、已退出的成员里有 → `MEMBER_LEFT`；都没有（包括 `@` 后面是空的）→ `UNKNOWN_MEMBER`。同一个人点两次只算一次。
+  匹配不到或重名都不猜。这是基线刻意保持的笨：模糊匹配、别名、「阿 Ken」这类叫法留给 Agent 去做，E1 评测靠这个差距体现 Agent 的价值。
+- **付款人**：默认是自己。`by @成员`（`by` 单独成词，大小写不限）或 `由 @成员`（也可以连写 `由@成员`）指定别人；后面不是 `@` 的 `by`、`由`（`by bus`、`由布院`）是普通文字。指定了两个付款人 → `AMBIGUOUS_PAYER`。付款人有问题时 `draft.paidByMemberId` 为 null。
+- **分摊者**：其余的 `@成员` 加上付款人，平均分摊（`splitMode = equal`），`draft.splits` 按 `memberId` 升序。除了指定付款人的那个 `@` 没写任何 `@`，则全体在籍成员均分。认不出的成员不进 `splits`。
+- **标题**：为空 → `MISSING_TITLE`；超过 128 字符 → `TITLE_TOO_LONG`。
+- **不支持**：逐人指定金额、个人支出（`none`）、日期时间、类别，这些词不会被识别，原样留在标题里。要这些请用表单。`draft` 的 `occurredAt`、`occurredTz` 为 null，不带 `category`，创建时取默认值（确认时的现在、trip 时区、`other`）。
+- 解析成功后按「记账预览」的规则算 `preview`。这一步若仍出错（只在并发时，如刚好有人退出），按记账预览的错误返回 4xx。
 
 ### 查看类指令
 
@@ -431,9 +451,11 @@ warnings 的 code：`CURRENCY_DEFAULTED`（没写币别，取行程的默认币�
 | `/owe` | `/欠款` | `kind=view`，`view=debts` |
 | `/today` | `/今天` | `kind=view`，`view=today_expenses` |
 
+指令后面多余的文字忽略，v1 的查看类指令没有参数。
+
 ### 暂未开放
 
-`/todo` `/visited` `/missed` `/skip` `/mood` `/note` 等，对应的表还没建。认得但返回 `status=unsupported`、`COMMAND_NOT_AVAILABLE`，不要当成 `UNKNOWN_COMMAND`，以免评测把它们算成解析错误。
+`/todo` `/visited` `/missed` `/skip` `/mood` `/note`，只有这几个，没有别名，对应的表还没建。认得但返回 `status=unsupported`、`COMMAND_NOT_AVAILABLE`（`text` 是指令词，如 `/todo`），`command` 是指令名，`kind`、`draft` 为 null。不要当成 `UNKNOWN_COMMAND`，以免评测把它们算成解析错误。
 
 ## 人/天数统计
 
