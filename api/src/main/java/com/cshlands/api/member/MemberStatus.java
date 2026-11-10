@@ -4,7 +4,7 @@ import com.cshlands.api.common.ValueEnum;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 /** 对应 trip_member.status；退出不删行，只改成 LEFT */
-enum MemberStatus implements ValueEnum {
+public enum MemberStatus implements ValueEnum {
 
     ACTIVE("active"),
     LEFT("left");

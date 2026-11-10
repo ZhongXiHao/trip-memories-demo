@@ -68,6 +68,12 @@ public class TripService {
         }
     }
 
+    /** 行程的默认币别：规则指令没写币别时取它 */
+    public String getDefaultCurrency(long userId, long tripId) {
+        memberService.requireActiveMember(userId, tripId);
+        return tripMapper.findView(tripId, userId).defaultCurrency();
+    }
+
     public TripClock getTripClock(long userId, long tripId) {
         memberService.requireActiveMember(userId, tripId);
         TripView view = tripMapper.findView(tripId, userId);

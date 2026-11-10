@@ -186,7 +186,7 @@ public class MemberService {
     }
 
     /** 在籍成员可看；包含已退出的成员，status 为 null 时不过滤 */
-    List<MemberView> list(long userId, long tripId, MemberStatus status) {
+    public List<MemberView> list(long userId, long tripId, MemberStatus status) {
         requireActiveMember(userId, tripId);
         return memberMapper.list(tripId, status);
     }
