@@ -3,7 +3,7 @@ package com.cshlands.api.expense;
 import com.cshlands.api.common.ValueEnum;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-enum Source implements ValueEnum {
+public enum Source implements ValueEnum {
     // form command agent，默认 form
     FORM("form"),
     COMMAND("command"),

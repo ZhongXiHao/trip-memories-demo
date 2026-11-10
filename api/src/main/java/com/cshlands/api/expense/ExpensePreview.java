@@ -4,7 +4,7 @@ import com.cshlands.api.common.Warning;
 
 import java.util.List;
 
-record ExpensePreview(
+public record ExpensePreview(
         long amountMinor,
         String currency,
         List<SplitView> splits,
